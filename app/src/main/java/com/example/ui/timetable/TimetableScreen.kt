@@ -82,6 +82,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -518,7 +519,7 @@ fun TimetableScreen(
                                                     .offset(x = leftOffset, y = topOffset)
                                                     .width(colWidth)
                                                     .height(cardHeight)
-                                                    .padding(horizontal = 2.dp, vertical = 2.dp),
+                                                    .padding(horizontal = 1.dp, vertical = 1.dp),
                                             )
                                         }
 
@@ -1748,7 +1749,7 @@ private fun CourseGridCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(horizontal = 2.dp, vertical = 3.dp),
             contentAlignment = Alignment.TopStart,
         ) {
             Column(
@@ -1762,37 +1763,37 @@ private fun CourseGridCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.45f)
-                        .height(3.dp)
+                        .height(2.5.dp)
                         .clip(CircleShape)
                         .background(accentColor),
                 )
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = course.name,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                    ),
                     fontWeight = FontWeight.Bold,
-                    fontSize = (11f * scale).sp,
-                    lineHeight = (13f * scale).sp,
+                    fontSize = (10.2f * scale).sp,
+                    lineHeight = (11.8f * scale).sp,
                     color = textColor,
-                    maxLines = when {
-                        spanSections >= 3 -> 4
-                        spanSections == 2 -> 3
-                        else -> 2
-                    },
-                    overflow = TextOverflow.Ellipsis,
+                    maxLines = Int.MAX_VALUE,
+                    overflow = TextOverflow.Clip,
                 )
-                val compactLoc = course.compactDisplayLocation()
+                val compactLoc = course.compactDisplayLocation().removePrefix("@")
                 if (compactLoc.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(1.5.dp))
                     Text(
                         text = compactLoc,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontSize = (10f * scale).sp,
-                        lineHeight = (12f * scale).sp,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        ),
+                        fontSize = (9.2f * scale).sp,
+                        lineHeight = (10.8f * scale).sp,
                         fontWeight = FontWeight.Medium,
                         color = textColor.copy(alpha = 0.9f),
-                        maxLines = if (spanSections >= 2) 2 else 1,
-                        overflow = TextOverflow.Ellipsis,
+                        maxLines = Int.MAX_VALUE,
+                        overflow = TextOverflow.Clip,
                     )
                 }
                 if (!compactMode && course.teacher.isNotBlank() && spanSections >= 3) {
