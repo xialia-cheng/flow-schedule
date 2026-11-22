@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">流云日程</string>
+    <string name="widget_name">流云日程 · 下一项</string>
+    <string name="widget_description">实时展示今天下一节课程或待办日程的名称、地点与剩余时间</string>
+    <string name="channel_live_updates_name">日程实时活动（流体云）</string>
+    <string name="channel_live_updates_desc">在日程临近或进行中时，于状态栏胶囊与通知栏实时展示进度和倒计时</string>
+
+    <string name="today_todo_title">今日待办</string>
+    <string name="active_live_section_title">流体云实时状态</string>
+    <string name="test_fluid_cloud_btn">测试流体云效果</string>
+    <string name="test_fluid_cloud_subtitle">一键演练临近课程胶囊（15秒课前倒计时 → 自动上课），验证跨应用流体云课程名、剩余时间与地点</string>
+    <string name="test_schedule_title">高等数学</string>
+    <string name="test_schedule_notes">@教A-301 · 临近课程流体云演练：体验状态栏胶囊、分段进度条与快捷操作。</string>
+
+    <string name="action_complete">已完成</string>
+    <string name="action_snooze_10m">延后 10 分钟</string>
+    <string name="action_toggle_dnd">切换免打扰</string>
+    <string name="action_end_now">立即结束</string>
+    <string name="status_dnd_enabled">免打扰已开启</string>
+    <string name="permission_dnd_title">免打扰快捷控制权限</string>
+    <string name="permission_dnd_desc">允许在流体云卡片中一键切换系统免打扰，专注上课与会议</string>
+    <string name="action_add_schedule">新建日程</string>
+    <string name="action_edit_schedule">编辑日程</string>
+    <string name="action_save">保存日程</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_delete">删除</string>
+    <string name="action_undo">撤销</string>
+    <string name="action_permissions">流体云权限设置</string>
+
+    <string name="status_in_progress">进行中</string>
+    <string name="status_upcoming">即将开始</string>
+    <string name="status_completed">已完成</string>
+    <string name="status_scheduled">待开始</string>
+    <string name="status_expired">已结束</string>
+
+    <string name="filter_today">今天</string>
+    <string name="filter_tomorrow">明天</string>
+    <string name="filter_upcoming">未来日程</string>
+    <string name="filter_all">全部</string>
+
+    <string name="empty_schedule_title">此刻清朗，暂无安排</string>
+    <string name="empty_schedule_subtitle">点击右下角“+”添加日程，或点击上方“测试流体云效果”体验实时胶囊提醒</string>
+
+    <string name="permission_guide_title">开启流体云实时提醒</string>
+    <string name="permission_guide_subtitle">为确保 ColorOS 17 流体云与 Android 16+ Live Updates 准时在状态栏胶囊展示，请确认以下权限：</string>
+    <string name="permission_post_notifications_title">基础通知权限</string>
+    <string name="permission_post_notifications_desc">用于弹出日程提醒与实时活动通知卡片</string>
+    <string name="permission_promoted_title">实时活动 / 流体云权限</string>
+    <string name="permission_promoted_desc">允许系统将进行中与临近日程提升至状态栏胶囊与锁屏顶部</string>
+    <string name="permission_exact_alarm_title">准时后台闹钟权限</string>
+    <string name="permission_exact_alarm_desc">确保应用在后台或熄屏时准点唤醒并更新日程进度</string>
+    <string name="permission_granted">已开启</string>
+    <string name="permission_missing">去开启</string>
+    <string name="permission_compat_mode">兼容模式</string>
+    <string name="permission_done_btn">进入流云日程</string>
+
+    <string name="cd_add_schedule">新建日程</string>
+    <string name="cd_open_permissions">打开流体云权限设置</string>
+    <string name="cd_toggle_complete">切换日程完成状态</string>
+    <string name="cd_delete_schedule">删除日程</string>
+    <string name="cd_empty_illustration">暂无日程插画</string>
+    <string name="cd_switch_theme">切换深色或浅色主题</string>
+
+    <string name="theme_mode_system">跟随系统</string>
+    <string name="theme_mode_light">浅色</string>
+    <string name="theme_mode_dark">深色</string>
+    <string name="section_morning">上午</string>
+    <string name="section_afternoon">下午</string>
+    <string name="section_evening">晚间</string>
+    <string name="section_completed">已完成</string>
+</resources>
