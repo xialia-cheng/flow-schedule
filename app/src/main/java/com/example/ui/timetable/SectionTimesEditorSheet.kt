@@ -63,6 +63,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -1608,17 +1609,26 @@ private fun NumericWheelPicker(
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
     val coroutineScope = rememberCoroutineScope()
 
-    // Sync external ±5m updates to wheel scroll position
+    val latestSelectedValue by rememberUpdatedState(selectedValue)
+    var isProgrammaticScroll by remember { mutableStateOf(false) }
+
+    // Sync external ±5m / ±10m updates to wheel scroll position without fighting snapshotFlow
     LaunchedEffect(selectedValue) {
         val targetIndex = (selectedValue - range.first).coerceIn(0, values.lastIndex)
-        if (listState.firstVisibleItemIndex != targetIndex && !listState.isScrollInProgress) {
-            listState.animateScrollToItem(targetIndex)
+        if (listState.firstVisibleItemIndex != targetIndex || listState.firstVisibleItemScrollOffset != 0) {
+            isProgrammaticScroll = true
+            try {
+                listState.animateScrollToItem(targetIndex)
+            } finally {
+                isProgrammaticScroll = false
+            }
         }
     }
 
-    // Report scrolled center item back to caller
+    // Report user-scrolled center item back to caller
     LaunchedEffect(listState) {
         snapshotFlow {
+            if (isProgrammaticScroll) return@snapshotFlow null
             val offsetThreshold = 20
             val idx = if (listState.firstVisibleItemScrollOffset > offsetThreshold) {
                 listState.firstVisibleItemIndex + 1
@@ -1629,8 +1639,9 @@ private fun NumericWheelPicker(
         }
             .distinctUntilChanged()
             .collect { centeredIdx ->
+                if (centeredIdx == null) return@collect
                 val value = values[centeredIdx]
-                if (value != selectedValue) {
+                if (value != latestSelectedValue) {
                     onValueSelected(value)
                 }
             }
