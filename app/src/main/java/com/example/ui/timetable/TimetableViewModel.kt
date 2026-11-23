@@ -273,6 +273,21 @@ class TimetableViewModel(
                     customColorHex = normalizedHex,
                 ),
             )
+            // Keep all courses with the same name using the exact same color
+            val sameNameCourses = uiState.value.courses.filter {
+                it.timetableId == active.id &&
+                    it.id != existingId &&
+                    it.name.trim() == trimmed &&
+                    (it.colorIndex != colorIndex || it.customColorHex != normalizedHex)
+            }
+            sameNameCourses.forEach { sibling ->
+                timetableRepository.saveCourse(
+                    sibling.copy(
+                        colorIndex = colorIndex,
+                        customColorHex = normalizedHex,
+                    ),
+                )
+            }
             emitMessage(if (existingId == 0L) "已添加课程「$trimmed」" else "已更新课程「$trimmed」")
         }
     }
