@@ -1931,14 +1931,15 @@ private fun CourseGridCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 1.5.dp, vertical = 4.dp),
-            contentAlignment = Alignment.Center,
+                .padding(horizontal = 2.dp, vertical = 4.dp),
+            contentAlignment = Alignment.TopCenter,
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .align(Alignment.TopCenter)
                     .padding(bottom = if (!isCurrentWeek) 14.dp else 0.dp),
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.Top,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
@@ -1957,7 +1958,7 @@ private fun CourseGridCard(
                 )
                 val compactLoc = course.compactDisplayLocation().removePrefix("@")
                 if (compactLoc.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = compactLoc,
                         style = MaterialTheme.typography.bodySmall.copy(
@@ -1968,13 +1969,13 @@ private fun CourseGridCard(
                         letterSpacing = (-0.25).sp,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center,
-                        color = textColor.copy(alpha = 0.78f),
+                        color = textColor.copy(alpha = 0.80f),
                         maxLines = Int.MAX_VALUE,
                         overflow = TextOverflow.Clip,
                     )
                 }
                 if (!compactMode && course.teacher.isNotBlank() && spanSections >= 3) {
-                    Spacer(modifier = Modifier.height(3.dp))
+                    Spacer(modifier = Modifier.height(2.5.dp))
                     Text(
                         text = course.teacher,
                         style = MaterialTheme.typography.bodySmall.copy(
