@@ -279,7 +279,7 @@ private fun FlowWidgetContent(
             )
             Spacer(modifier = GlanceModifier.height(4.dp))
             Text(
-                text = "点击打开流云日程，随时一句话创建新安排",
+                text = "点击打开微澜日程，随时一句话创建新安排",
                 style = TextStyle(
                     color = GlanceTheme.colors.onSurfaceVariant,
                     fontSize = 12.sp,

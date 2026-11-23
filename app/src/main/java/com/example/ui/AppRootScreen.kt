@@ -65,10 +65,14 @@ import com.example.ui.smart.SmartCaptureUiState
 import com.example.ui.smart.SmartCaptureViewModel
 import com.example.ui.study.StudyScreen
 import com.example.ui.study.StudyViewModel
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import com.example.ui.theme.FlowMotion
 import com.example.ui.theme.FlowTheme
 import com.example.ui.timetable.TimetableScreen
 import com.example.ui.timetable.TimetableViewModel
+import com.example.ui.update.AppUpdateViewModel
+import com.example.ui.update.UpdateAvailableDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -78,6 +82,7 @@ fun AppRootScreen(
     timetableViewModel: TimetableViewModel,
     studyViewModel: StudyViewModel,
     smartCaptureViewModel: SmartCaptureViewModel,
+    appUpdateViewModel: AppUpdateViewModel,
     deepLinkDestination: AppDestination?,
     onDeepLinkConsumed: () -> Unit,
     onRequestPostNotifications: () -> Unit,
@@ -89,6 +94,7 @@ fun AppRootScreen(
     var currentTab by rememberSaveable { mutableStateOf(AppDestination.TIMETABLE) }
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
     val smartState by smartCaptureViewModel.uiState.collectAsStateWithLifecycle()
+    val updateState by appUpdateViewModel.uiState.collectAsStateWithLifecycle()
     val snackbarEvent by scheduleViewModel.snackbarEvent.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val rootView = LocalView.current
@@ -99,6 +105,10 @@ fun AppRootScreen(
     val undoLabel = stringResource(R.string.action_undo)
     val testTitle = stringResource(R.string.test_schedule_title)
     val testNotes = stringResource(R.string.test_schedule_notes)
+
+    LaunchedEffect(Unit) {
+        appUpdateViewModel.maybeAutoCheckOnStartup()
+    }
 
     LaunchedEffect(deepLinkDestination) {
         if (deepLinkDestination != null) {
@@ -205,10 +215,19 @@ fun AppRootScreen(
                                 selected = selected,
                                 onClick = { rootView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); currentTab = destination },
                                 icon = {
-                                    Icon(
-                                        imageVector = if (selected) destination.selectedIcon else destination.unselectedIcon,
-                                        contentDescription = destination.label,
-                                    )
+                                    val showUpdateDot = destination == AppDestination.MINE && updateState.availableRelease != null
+                                    BadgedBox(
+                                        badge = {
+                                            if (showUpdateDot) {
+                                                Badge(containerColor = colorScheme.error)
+                                            }
+                                        },
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selected) destination.selectedIcon else destination.unselectedIcon,
+                                            contentDescription = destination.label,
+                                        )
+                                    }
                                 },
                                 label = {
                                     Text(
@@ -241,6 +260,7 @@ fun AppRootScreen(
                             timetableViewModel = timetableViewModel,
                             studyViewModel = studyViewModel,
                             smartCaptureViewModel = smartCaptureViewModel,
+                            appUpdateViewModel = appUpdateViewModel,
                             smartState = smartState,
                             onShowMessage = showMessage,
                             onOpenPermissions = { scheduleViewModel.openPermissionSheet() },
@@ -273,10 +293,19 @@ fun AppRootScreen(
                                     selected = selected,
                                     onClick = { currentTab = destination },
                                     icon = {
-                                        Icon(
-                                            imageVector = if (selected) destination.selectedIcon else destination.unselectedIcon,
-                                            contentDescription = destination.label,
-                                        )
+                                        val showUpdateDot = destination == AppDestination.MINE && updateState.availableRelease != null
+                                        BadgedBox(
+                                            badge = {
+                                                if (showUpdateDot) {
+                                                    Badge(containerColor = colorScheme.error)
+                                                }
+                                            },
+                                        ) {
+                                            Icon(
+                                                imageVector = if (selected) destination.selectedIcon else destination.unselectedIcon,
+                                                contentDescription = destination.label,
+                                            )
+                                        }
                                     },
                                     label = {
                                         Text(
@@ -310,6 +339,7 @@ fun AppRootScreen(
                         timetableViewModel = timetableViewModel,
                         studyViewModel = studyViewModel,
                         smartCaptureViewModel = smartCaptureViewModel,
+                        appUpdateViewModel = appUpdateViewModel,
                         smartState = smartState,
                         onShowMessage = showMessage,
                         onOpenPermissions = { scheduleViewModel.openPermissionSheet() },
@@ -356,6 +386,14 @@ fun AppRootScreen(
             onDismiss = { scheduleViewModel.dismissPermissionSheet() },
         )
     }
+    val pendingRelease = updateState.availableRelease
+    if (updateState.showUpdateDialog && pendingRelease != null) {
+        UpdateAvailableDialog(
+            release = pendingRelease,
+            onDismiss = { appUpdateViewModel.dismissUpdateDialog() },
+            onShowMessage = showMessage,
+        )
+    }
 }
 
 @Composable
@@ -365,6 +403,7 @@ private fun TabContentHost(
     timetableViewModel: TimetableViewModel,
     studyViewModel: StudyViewModel,
     smartCaptureViewModel: SmartCaptureViewModel,
+    appUpdateViewModel: AppUpdateViewModel,
     smartState: SmartCaptureUiState,
     onShowMessage: (String) -> Unit,
     onOpenPermissions: () -> Unit,
@@ -414,6 +453,7 @@ private fun TabContentHost(
                 timetableViewModel = timetableViewModel,
                 scheduleViewModel = scheduleViewModel,
                 smartCaptureViewModel = smartCaptureViewModel,
+                appUpdateViewModel = appUpdateViewModel,
                 onOpenPermissions = onOpenPermissions,
                 onOpenDndPolicySettings = onOpenDndPolicySettings,
                 onTriggerFluidCloudTest = onTriggerFluidCloudTest,

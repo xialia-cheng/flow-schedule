@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "FlowCloudSchedule"
+rootProject.name = "RipplePlan"
 
 include(":app")

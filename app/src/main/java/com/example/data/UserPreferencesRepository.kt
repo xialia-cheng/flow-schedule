@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.smart.LocalKeystoreCipher
@@ -96,6 +97,8 @@ data class AppSettings(
     val focusLinkFluidCloud: Boolean = true,
     val focusLinkDnd: Boolean = false,
     val customScheduleTags: List<CustomScheduleTag> = emptyList(),
+    val autoCheckUpdates: Boolean = true,
+    val lastUpdateCheckMillis: Long = 0L,
     val customAiConfig: CustomAiConfig = CustomAiConfig(),
 )
 
@@ -133,6 +136,8 @@ class UserPreferencesRepository(private val context: Context) {
         val FOCUS_LINK_FLUID_CLOUD = booleanPreferencesKey("focus_link_fluid_cloud")
         val FOCUS_LINK_DND = booleanPreferencesKey("focus_link_dnd")
         val CUSTOM_SCHEDULE_TAGS_JSON = stringPreferencesKey("custom_schedule_tags_json")
+        val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
+        val LAST_UPDATE_CHECK_MILLIS = longPreferencesKey("last_update_check_millis")
 
         // Optional custom OpenAI-compatible AI config (API key encrypted via Android Keystore)
         val CUSTOM_AI_ENABLED = booleanPreferencesKey("custom_ai_enabled")
@@ -191,6 +196,8 @@ class UserPreferencesRepository(private val context: Context) {
             focusLinkFluidCloud = prefs[Keys.FOCUS_LINK_FLUID_CLOUD] ?: true,
             focusLinkDnd = prefs[Keys.FOCUS_LINK_DND] ?: false,
             customScheduleTags = CustomScheduleTagCodec.decode(prefs[Keys.CUSTOM_SCHEDULE_TAGS_JSON].orEmpty()),
+            autoCheckUpdates = prefs[Keys.AUTO_CHECK_UPDATES] ?: true,
+            lastUpdateCheckMillis = prefs[Keys.LAST_UPDATE_CHECK_MILLIS] ?: 0L,
             customAiConfig = CustomAiConfig(
                 enabled = prefs[Keys.CUSTOM_AI_ENABLED] ?: false,
                 baseUrl = prefs[Keys.CUSTOM_AI_BASE_URL].orEmpty(),
@@ -385,6 +392,18 @@ class UserPreferencesRepository(private val context: Context) {
             prefs[Keys.CUSTOM_AI_BASE_URL] = ""
             prefs[Keys.CUSTOM_AI_API_KEY_ENC] = ""
             prefs[Keys.CUSTOM_AI_MODEL] = ""
+        }
+    }
+
+    suspend fun setAutoCheckUpdates(enabled: Boolean) {
+        context.userPreferencesDataStore.edit { prefs ->
+            prefs[Keys.AUTO_CHECK_UPDATES] = enabled
+        }
+    }
+
+    suspend fun setLastUpdateCheckMillis(timestampMillis: Long) {
+        context.userPreferencesDataStore.edit { prefs ->
+            prefs[Keys.LAST_UPDATE_CHECK_MILLIS] = timestampMillis
         }
     }
 }

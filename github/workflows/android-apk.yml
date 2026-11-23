@@ -38,5 +38,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FlowSchedule-debug-apk
+          name: RipplePlan-debug-apk
           path: app/build/outputs/apk/debug/*.apk

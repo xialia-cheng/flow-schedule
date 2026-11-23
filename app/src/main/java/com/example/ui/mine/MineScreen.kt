@@ -48,6 +48,8 @@ import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.SystemUpdateAlt
+import androidx.compose.material.icons.rounded.Update
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WarningAmber
@@ -106,6 +108,7 @@ import com.example.ui.smart.SmartCaptureViewModel
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 import com.example.ui.timetable.TimetableViewModel
+import com.example.ui.update.AppUpdateViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -115,6 +118,7 @@ fun MineScreen(
     timetableViewModel: TimetableViewModel,
     scheduleViewModel: ScheduleViewModel,
     smartCaptureViewModel: SmartCaptureViewModel,
+    appUpdateViewModel: AppUpdateViewModel,
     onOpenPermissions: () -> Unit,
     onOpenDndPolicySettings: () -> Unit = {},
     onTriggerFluidCloudTest: () -> Unit,
@@ -124,6 +128,7 @@ fun MineScreen(
     val ttState by timetableViewModel.uiState.collectAsStateWithLifecycle()
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
     val smartState by smartCaptureViewModel.uiState.collectAsStateWithLifecycle()
+    val updateState by appUpdateViewModel.uiState.collectAsStateWithLifecycle()
     val settings = ttState.settings
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
@@ -705,7 +710,7 @@ fun MineScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        exportBackupLauncher.launch("flow_timetable_backup.json")
+                                        exportBackupLauncher.launch("ripple_plan_timetable_backup.json")
                                     }
                                     .padding(horizontal = 16.dp, vertical = 14.dp)
                                     .testTag("mine_export_json_button"),
@@ -791,11 +796,11 @@ fun MineScreen(
                 }
             }
 
-            // 5. About App, Help & Open Source License
+            // 5. App Updates & About App, Help & Open Source License
             item(key = "about_section") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "应用信息",
+                        text = "应用更新与信息",
                         style = MaterialTheme.typography.titleSmall,
                         color = colorScheme.onSurfaceVariant,
                     )
@@ -806,43 +811,199 @@ fun MineScreen(
                         color = flowColors.cardElevated,
                         border = BorderStroke(1.dp, colorScheme.outlineVariant),
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showAboutSheet = true }
-                                .padding(horizontal = 16.dp, vertical = 14.dp)
-                                .testTag("mine_about_help_entry"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
+                        Column {
+                            // Check Updates Button
                             Row(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (updateState.availableRelease != null && !updateState.isChecking) {
+                                            appUpdateViewModel.openUpdateDialog()
+                                        } else {
+                                            appUpdateViewModel.checkForUpdatesManually(onShowMessage)
+                                        }
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                                    .testTag("mine_check_update_button"),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Info,
-                                    contentDescription = null,
-                                    tint = colorScheme.primary,
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "关于应用、帮助与开源协议",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = colorScheme.onSurface,
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Box {
+                                        Icon(
+                                            imageVector = Icons.Rounded.SystemUpdateAlt,
+                                            contentDescription = null,
+                                            tint = colorScheme.primary,
+                                        )
+                                        if (updateState.availableRelease != null) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .align(Alignment.TopEnd)
+                                                    .background(colorScheme.error, CircleShape)
+                                                    .testTag("mine_check_update_red_dot"),
+                                            )
+                                        }
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            Text(
+                                                text = "检查更新",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = colorScheme.onSurface,
+                                            )
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = if (updateState.availableRelease != null) {
+                                                    colorScheme.errorContainer
+                                                } else {
+                                                    colorScheme.surfaceContainerHighest
+                                                },
+                                            ) {
+                                                Text(
+                                                    text = if (updateState.availableRelease != null) {
+                                                        "新版本 v${updateState.availableRelease!!.versionName}"
+                                                    } else {
+                                                        "v${BuildConfig.VERSION_NAME}"
+                                                    },
+                                                    fontFamily = MonoFontFamily,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (updateState.availableRelease != null) {
+                                                        colorScheme.onErrorContainer
+                                                    } else {
+                                                        colorScheme.onSurfaceVariant
+                                                    },
+                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = when {
+                                                updateState.isChecking -> "正在从 GitHub Releases 检查最新版本..."
+                                                updateState.availableRelease != null ->
+                                                    "点击查看更新日志并前往浏览器下载新版本"
+                                                !updateState.lastStatusHint.isNullOrBlank() ->
+                                                    updateState.lastStatusHint!!
+                                                else -> "仅向 GitHub Releases 发起只读检查，不上传个人数据"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                                if (updateState.isChecking) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
                                     )
-                                    Text(
-                                        text = "v${BuildConfig.VERSION_NAME} · 作者、权限指南、隐私声明与 MIT 协议",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = colorScheme.onSurfaceVariant,
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ChevronRight,
+                                        contentDescription = null,
+                                        tint = colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
-                            Icon(
-                                imageVector = Icons.Rounded.ChevronRight,
-                                contentDescription = null,
-                                tint = colorScheme.onSurfaceVariant,
+
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = colorScheme.outlineVariant,
                             )
+
+                            // Auto-check on startup switch
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        appUpdateViewModel.setAutoCheckUpdates(!updateState.autoCheckUpdates)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Update,
+                                        contentDescription = null,
+                                        tint = flowColors.liveAccent,
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "启动时自动检查更新",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = colorScheme.onSurface,
+                                        )
+                                        Text(
+                                            text = "每 24 小时最多检查一次；关闭后可保持完全零联网运行",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = updateState.autoCheckUpdates,
+                                    onCheckedChange = { appUpdateViewModel.setAutoCheckUpdates(it) },
+                                    modifier = Modifier.testTag("mine_auto_check_updates_switch"),
+                                )
+                            }
+
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = colorScheme.outlineVariant,
+                            )
+
+                            // About App, Help & License
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showAboutSheet = true }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                                    .testTag("mine_about_help_entry"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Info,
+                                        contentDescription = null,
+                                        tint = colorScheme.primary,
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "关于应用、帮助与开源协议",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = colorScheme.onSurface,
+                                        )
+                                        Text(
+                                            text = "v${BuildConfig.VERSION_NAME} · 作者、权限指南、隐私与网络说明及 MIT 协议",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = Icons.Rounded.ChevronRight,
+                                    contentDescription = null,
+                                    tint = colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
@@ -856,6 +1017,14 @@ fun MineScreen(
 
     if (showAboutSheet) {
         AboutHelpLicenseSheet(
+            updateState = updateState,
+            onCheckUpdates = {
+                if (updateState.availableRelease != null && !updateState.isChecking) {
+                    appUpdateViewModel.openUpdateDialog()
+                } else {
+                    appUpdateViewModel.checkForUpdatesManually(onShowMessage)
+                }
+            },
             onDismiss = { showAboutSheet = false },
             onShowMessage = onShowMessage,
         )
@@ -1010,7 +1179,7 @@ private fun OfflineOverviewCard(
                             modifier = Modifier.size(14.dp),
                         )
                         Text(
-                            text = "纯本地离线",
+                            text = "本地优先 · 零数据收集",
                             style = MaterialTheme.typography.labelSmall,
                             color = colorScheme.onSecondaryContainer,
                         )

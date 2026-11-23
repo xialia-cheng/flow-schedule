@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">流云日程</string>
-    <string name="widget_name">流云日程 · 下一项</string>
+    <string name="app_name">微澜日程</string>
+    <string name="widget_name">微澜日程 · 下一项</string>
     <string name="widget_description">实时展示今天下一节课程或待办日程的名称、地点与剩余时间</string>
     <string name="channel_live_updates_name">日程实况通知</string>
     <string name="channel_live_updates_desc">在日程临近或进行中时，于状态栏实况胶囊或实时进度通知中展示倒计时</string>
@@ -53,7 +53,7 @@
     <string name="permission_granted">已开启</string>
     <string name="permission_missing">去开启</string>
     <string name="permission_compat_mode">兼容模式</string>
-    <string name="permission_done_btn">进入流云日程</string>
+    <string name="permission_done_btn">进入微澜日程</string>
 
     <string name="cd_add_schedule">新建日程</string>
     <string name="cd_open_permissions">打开实况通知权限设置</string>

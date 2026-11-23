@@ -36,7 +36,7 @@ class ExampleRobolectricTest {
     fun `read string from context`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val appName = context.getString(R.string.app_name)
-        assertEquals("流云日程", appName)
+        assertEquals("微澜日程", appName)
     }
 
     @Test
@@ -1128,4 +1128,67 @@ class ExampleRobolectricTest {
         assertTrue(restored.schedules.first().isCompleted)
         assertEquals("已完成实验报告", restored.schedules.first().title)
     }
+
+    @Test
+    fun `app update semantic version comparator handles prefixes multi digit segments and prereleases`() {
+        val checker = com.example.update.AppUpdateChecker
+
+        assertTrue(checker.isRemoteVersionNewer("v2.2.0", "2.1.2"))
+        assertTrue(checker.isRemoteVersionNewer("V2.1.10", "2.1.2"))
+        assertTrue(checker.isRemoteVersionNewer("3.0", "2.9.9"))
+        assertTrue(checker.isRemoteVersionNewer("2.2.0", "2.2.0-beta.1"))
+
+        assertFalse(checker.isRemoteVersionNewer("v2.1.2", "2.1.2"))
+        assertFalse(checker.isRemoteVersionNewer("2.1.2", "2.1.2"))
+        assertFalse(checker.isRemoteVersionNewer("v2.1.1", "2.1.2"))
+        assertFalse(checker.isRemoteVersionNewer("2.1.2-rc.1", "2.1.2"))
+        assertFalse(checker.isRemoteVersionNewer("", "2.1.2"))
+    }
+
+    @Test
+    fun `github releases parser extracts apk asset url and detects newer or up to date versions`() {
+        val checker = com.example.update.AppUpdateChecker
+        val newerReleaseJson = """
+            {
+              "tag_name": "v2.2.0",
+              "html_url": "https://github.com/xialia-cheng/ripple-plan/releases/tag/v2.2.0",
+              "body": "1. 优化实况通知显示\n2. 修复已知问题",
+              "assets": [
+                {
+                  "name": "checksums.txt",
+                  "browser_download_url": "https://github.com/xialia-cheng/ripple-plan/releases/download/v2.2.0/checksums.txt"
+                },
+                {
+                  "name": "RipplePlan-v2.2.0-release.apk",
+                  "browser_download_url": "https://github.com/xialia-cheng/ripple-plan/releases/download/v2.2.0/RipplePlan-v2.2.0-release.apk"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val updateResult = checker.parseLatestReleaseJson(newerReleaseJson, currentVersion = "2.1.2")
+        assertTrue(updateResult is com.example.update.UpdateCheckResult.UpdateAvailable)
+        val available = updateResult as com.example.update.UpdateCheckResult.UpdateAvailable
+        assertEquals("2.2.0", available.release.versionName)
+        assertTrue(available.release.hasApkAsset)
+        assertTrue(available.release.downloadUrl.endsWith(".apk"))
+        assertTrue(available.release.releaseNotes.contains("优化实况通知显示"))
+
+        val noApkJson = """
+            {
+              "tag_name": "v2.2.0",
+              "html_url": "https://github.com/xialia-cheng/ripple-plan/releases/tag/v2.2.0",
+              "body": ""
+            }
+        """.trimIndent()
+        val fallbackResult = checker.parseLatestReleaseJson(noApkJson, currentVersion = "2.1.2")
+        assertTrue(fallbackResult is com.example.update.UpdateCheckResult.UpdateAvailable)
+        val fallbackAvailable = fallbackResult as com.example.update.UpdateCheckResult.UpdateAvailable
+        assertFalse(fallbackAvailable.release.hasApkAsset)
+        assertEquals(fallbackAvailable.release.releasePageUrl, fallbackAvailable.release.downloadUrl)
+
+        val sameVersionResult = checker.parseLatestReleaseJson(newerReleaseJson, currentVersion = "2.2.0")
+        assertTrue(sameVersionResult is com.example.update.UpdateCheckResult.UpToDate)
+    }
 }
+

@@ -30,6 +30,7 @@ import com.example.ui.smart.SmartCaptureViewModel
 import com.example.ui.study.StudyViewModel
 import com.example.ui.theme.FlowScheduleTheme
 import com.example.ui.timetable.TimetableViewModel
+import com.example.ui.update.AppUpdateViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
@@ -66,6 +67,13 @@ class MainActivity : ComponentActivity() {
         val container = (application as ScheduleApp).container
         SmartCaptureViewModel.Factory(
             orchestrator = container.smartCaptureOrchestrator,
+            preferencesRepository = container.preferencesRepository,
+        )
+    }
+
+    private val appUpdateViewModel: AppUpdateViewModel by viewModels {
+        val container = (application as ScheduleApp).container
+        AppUpdateViewModel.Factory(
             preferencesRepository = container.preferencesRepository,
         )
     }
@@ -143,6 +151,7 @@ class MainActivity : ComponentActivity() {
                     timetableViewModel = timetableViewModel,
                     studyViewModel = studyViewModel,
                     smartCaptureViewModel = smartCaptureViewModel,
+                    appUpdateViewModel = appUpdateViewModel,
                     deepLinkDestination = pendingDeepLink,
                     onDeepLinkConsumed = { deepLinkTab.value = null },
                     onRequestPostNotifications = {

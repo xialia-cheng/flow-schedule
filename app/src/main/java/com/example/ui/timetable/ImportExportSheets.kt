@@ -446,7 +446,7 @@ fun TimetableImportSheet(
                             ) {
                                 Button(
                                     onClick = {
-                                        createBackupLauncher.launch("flow_schedule_backup.json")
+                                        createBackupLauncher.launch("ripple_plan_backup.json")
                                     },
                                     modifier = Modifier
                                         .weight(1f)

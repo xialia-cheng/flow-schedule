@@ -559,7 +559,7 @@ class TimetableViewModel(
         )
         val summary = TimetableImportExport.buildShareSummaryText(tt, state.courses)
         val code = buildCurrentShareCode()
-        return "$summary\n\n复制下方口令在「流云日程」课表页点击导入即可还原：\n$code"
+        return "$summary\n\n复制下方口令在「微澜日程」课表页点击导入即可还原：\n$code"
     }
 
     suspend fun generateFullBackupJson(): String {

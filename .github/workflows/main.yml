@@ -81,14 +81,14 @@ jobs:
         if: steps.release_secrets.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: FlowSchedule-release-apk
+          name: RipplePlan-release-apk
           path: app/build/outputs/apk/release/*.apk
 
       - name: Upload Debug APK Artifact
         if: steps.release_secrets.outputs.available != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: FlowSchedule-debug-apk
+          name: RipplePlan-debug-apk
           path: app/build/outputs/apk/debug/*.apk
 
       - name: Publish GitHub Release

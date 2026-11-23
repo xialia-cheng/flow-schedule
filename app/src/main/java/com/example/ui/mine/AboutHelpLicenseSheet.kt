@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +36,8 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.SystemUpdateAlt
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -61,10 +64,11 @@ import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
+import com.example.ui.update.AppUpdateUiState
 
 private const val AUTHOR_NAME = "xialia cheng"
 private const val AUTHOR_EMAIL = "zly080701@gmail.com"
-private const val REPO_URL = "https://github.com/xialia150-wq/flow-schedule"
+private const val REPO_URL = "https://github.com/xialia-cheng/ripple-plan"
 
 private val MIT_LICENSE_FULL_TEXT = """
 MIT License
@@ -93,6 +97,8 @@ SOFTWARE.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutHelpLicenseSheet(
+    updateState: AppUpdateUiState = AppUpdateUiState(),
+    onCheckUpdates: () -> Unit = {},
     onDismiss: () -> Unit,
     onShowMessage: (String) -> Unit,
 ) {
@@ -131,7 +137,7 @@ fun AboutHelpLicenseSheet(
                         color = colorScheme.onSurface,
                     )
                     Text(
-                        text = "流云日程（FlowSchedule）· 版本与开源信息",
+                        text = "微澜日程（RipplePlan）· 版本与开源信息",
                         style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.onSurfaceVariant,
                     )
@@ -157,7 +163,7 @@ fun AboutHelpLicenseSheet(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "流云日程（FlowSchedule）",
+                                text = "微澜日程（RipplePlan）",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = colorScheme.onSurface,
@@ -215,7 +221,7 @@ fun AboutHelpLicenseSheet(
                             .clickable {
                                 val intent = Intent(Intent.ACTION_SENDTO).apply {
                                     data = Uri.parse("mailto:$AUTHOR_EMAIL")
-                                    putExtra(Intent.EXTRA_SUBJECT, "流云日程（FlowSchedule v${BuildConfig.VERSION_NAME}）反馈")
+                                    putExtra(Intent.EXTRA_SUBJECT, "微澜日程（RipplePlan v${BuildConfig.VERSION_NAME}）反馈")
                                 }
                                 runCatching { context.startActivity(intent) }.onFailure {
                                     onShowMessage("未检测到系统邮件应用，请手动联系 $AUTHOR_EMAIL")
@@ -322,6 +328,85 @@ fun AboutHelpLicenseSheet(
                             )
                         }
                     }
+
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = colorScheme.surfaceContainerLow,
+                        border = BorderStroke(1.dp, colorScheme.outlineVariant),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .clickable(enabled = !updateState.isChecking) { onCheckUpdates() }
+                            .testTag("about_check_update_button"),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Box {
+                                    Icon(
+                                        imageVector = Icons.Rounded.SystemUpdateAlt,
+                                        contentDescription = "检查版本更新",
+                                        tint = colorScheme.primary,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    if (updateState.availableRelease != null) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(7.dp)
+                                                .align(Alignment.TopEnd)
+                                                .background(colorScheme.error, CircleShape)
+                                                .testTag("about_check_update_red_dot"),
+                                        )
+                                    }
+                                }
+                                Column {
+                                    Text(
+                                        text = if (updateState.availableRelease != null) {
+                                            "检查更新 · 发现新版本 v${updateState.availableRelease.versionName}"
+                                        } else {
+                                            "检查更新（当前 v${BuildConfig.VERSION_NAME}）"
+                                        },
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = when {
+                                            updateState.isChecking -> "正在请求 GitHub Releases 公开版本信息..."
+                                            updateState.availableRelease != null -> "点击查看更新日志并前往浏览器下载"
+                                            !updateState.lastStatusHint.isNullOrBlank() -> updateState.lastStatusHint
+                                            else -> "仅读取 GitHub 公开 Releases 元数据"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            if (updateState.isChecking) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                    contentDescription = "检查版本更新",
+                                    tint = colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -341,28 +426,32 @@ fun AboutHelpLicenseSheet(
                     )
                     HelpBulletItem(
                         heading = "系统勿扰权限开启方法",
-                        body = "前往「我的 -> 通知与免打扰设置」点击“去授权”，或在系统「设置 -> 隐私 / 权限 -> 勿扰权限」中允许流云日程控制勿扰状态，即可在专注或上课期间自动切换静音级别，并在结束后自动恢复。",
+                        body = "前往「我的 -> 通知与免打扰设置」点击“去授权”，或在系统「设置 -> 隐私 / 权限 -> 勿扰权限」中允许微澜日程控制勿扰状态，即可在专注或上课期间自动切换静音级别，并在结束后自动恢复。",
                     )
                 }
             }
 
-            // 3. 隐私与数据声明
+            // 3. 隐私与网络说明
             AboutSectionCard(
                 icon = Icons.Rounded.Lock,
-                title = "3. 隐私与数据声明",
+                title = "3. 隐私与网络说明（本地优先 · 零数据收集）",
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     HelpBulletItem(
-                        heading = "100% 本地离线存储",
-                        body = "您的全部课表、节次作息、日程记录与专注统计仅保存在设备本地（Room / DataStore），应用不包含任何广告 SDK、行为统计追踪或后台数据上传逻辑。",
+                        heading = "本地优先 · 零数据收集",
+                        body = "您的全部课表、节次作息、日程记录、专注统计与提醒设置均仅保存在设备本地（Room / DataStore），无自建后端服务器、无广告 SDK，也无任何统计埋点或后台数据上传。以下列出全部唯二可控的联网场景：",
+                    )
+                    HelpBulletItem(
+                        heading = "检查版本更新（可控联网场景 1/2）",
+                        body = "仅向 GitHub 公开 Releases 接口发起只读 HTTPS 请求以获取最新版本号与更新日志，不上传任何设备标识或个人课表数据；在「我的」页面关闭“启动时自动检查更新”后即可保持完全零联网运行。",
+                    )
+                    HelpBulletItem(
+                        heading = "自定义 AI 解析（可控联网场景 2/2）",
+                        body = "默认关闭。仅当您主动开启「自定义 AI」并填写自己的 https:// 接口地址与密钥时，才会发送单次输入文本、当前日期时间与默认学期总周数，绝不会上传本地已有课表或日程。",
                     )
                     HelpBulletItem(
                         heading = "Android 自动备份凭据隔离",
-                        body = "已在系统自动备份与数据提取规则中明确排除本地加密偏好文件与运行态缓存，防止敏感凭据或 API Key 密文同步至云端；使用「自定义 AI」配置的密钥经由 Android Keystore AES-256 硬件级加密保存。",
-                    )
-                    HelpBulletItem(
-                        heading = "自定义 AI 接口外发说明",
-                        body = "仅当您主动开启「自定义 AI」并填写有效的 https:// 接口地址时，在触发“一句话创建”的当次才会将您的单次输入文本、当前日期时间与默认学期总周数发送至您自行指定的接口服务，绝不会上传本地已有课表或日程。",
+                        body = "已在系统自动备份与数据提取规则中明确排除本地加密偏好文件与运行态缓存，防止敏感凭据或 API Key 密文同步至云端；密钥经由 Android Keystore AES-256 硬件级加密保存。",
                     )
                 }
             }
