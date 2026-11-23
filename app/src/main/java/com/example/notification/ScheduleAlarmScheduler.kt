@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.example.MainActivity
 import com.example.data.DateTimeUtils
 import java.util.Calendar
 
@@ -107,9 +108,27 @@ class ScheduleAlarmScheduler(private val context: Context) {
         } else {
             true
         }
+        val isCriticalTransition = phase == PHASE_REMINDER ||
+            phase == PHASE_START ||
+            phase == PHASE_END
 
         runCatching {
-            if (canExact) {
+            if (canExact && isCriticalTransition) {
+                // setAlarmClock is exempt from ColorOS Doze/background throttling and fires
+                // to the exact second so 00:00 phase transitions never stall.
+                val showIntent = PendingIntent.getActivity(
+                    context,
+                    0,
+                    Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                alarmManager.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent),
+                    pendingIntent,
+                )
+            } else if (canExact) {
                 alarmManager.setExactAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     triggerAtMillis,
