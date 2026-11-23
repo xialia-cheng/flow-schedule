@@ -1146,7 +1146,9 @@ fun CourseDetailDialog(
     course: CourseEntity,
     sectionTimes: List<SectionTimeEntity>,
     displayedWeek: Int,
+    otherSlotCourses: List<CourseEntity> = emptyList(),
     canEdit: Boolean = false,
+    onSelectCourse: (CourseEntity) -> Unit = {},
     onDismiss: () -> Unit,
     onEdit: (CourseEntity) -> Unit,
     onDelete: (CourseEntity) -> Unit,
@@ -1226,6 +1228,41 @@ fun CourseDetailDialog(
                                 .fillMaxWidth()
                                 .padding(10.dp),
                         )
+                    }
+                }
+                if (otherSlotCourses.isNotEmpty()) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+                    Text(
+                        text = "同时段其他周次课程（点击切换）",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+                    otherSlotCourses.forEach { alt ->
+                        Surface(
+                            onClick = { onSelectCourse(alt) },
+                            shape = MaterialTheme.shapes.small,
+                            color = colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = alt.name,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = alt.weekRangeLabel(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colorScheme.primary,
+                                )
+                            }
+                        }
                     }
                 }
                 if (!canEdit) {
