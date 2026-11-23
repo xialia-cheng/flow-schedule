@@ -441,7 +441,7 @@ fun TimetableScreen(
                                     ) {
                                         val colWidth = maxWidth / dayCount
                                         val gridLineColor = colorScheme.outlineVariant.copy(
-                                            alpha = if (flowColors.isDark) 0.55f else 0.85f,
+                                            alpha = if (flowColors.isDark) 0.22f else 0.30f,
                                         )
                                         val selectedColIndex = visibleIsoDays.indexOf(state.selectedDayOfWeek)
                                             .takeIf { it in 0 until dayCount }
@@ -478,7 +478,6 @@ fun TimetableScreen(
                                                     size = Size(size.width, lunchH),
                                                 )
                                             }
-                                            val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
                                             for (sec in 1..sectionCount) {
                                                 val extraLunch = if (lunchAfterSection != null && sec > lunchAfterSection) lunchBreakHeight else 0.dp
                                                 val y = (sectionHeight * sec + extraLunch).toPx()
@@ -486,8 +485,7 @@ fun TimetableScreen(
                                                     color = gridLineColor,
                                                     start = Offset(0f, y),
                                                     end = Offset(size.width, y),
-                                                    strokeWidth = 1.dp.toPx(),
-                                                    pathEffect = dash,
+                                                    strokeWidth = 0.5.dp.toPx(),
                                                 )
                                                 if (lunchAfterSection != null && sec == lunchAfterSection && lunchBreakHeight > 0.dp) {
                                                     val lunchTopY = (sectionHeight * sec).toPx()
@@ -495,18 +493,17 @@ fun TimetableScreen(
                                                         color = gridLineColor,
                                                         start = Offset(0f, lunchTopY),
                                                         end = Offset(size.width, lunchTopY),
-                                                        strokeWidth = 1.dp.toPx(),
-                                                        pathEffect = dash,
+                                                        strokeWidth = 0.5.dp.toPx(),
                                                     )
                                                 }
                                             }
                                             for (col in 1 until dayCount) {
                                                 val x = (colWidth * col).toPx()
                                                 drawLine(
-                                                    color = gridLineColor.copy(alpha = 0.45f),
+                                                    color = gridLineColor.copy(alpha = if (flowColors.isDark) 0.14f else 0.20f),
                                                     start = Offset(x, 0f),
                                                     end = Offset(x, size.height),
-                                                    strokeWidth = 0.75.dp.toPx(),
+                                                    strokeWidth = 0.5.dp.toPx(),
                                                 )
                                             }
                                         }
@@ -1944,15 +1941,7 @@ private fun CourseGridCard(
                 verticalArrangement = Arrangement.Top,
                 horizontalAlignment = Alignment.Start,
             ) {
-                // Top subtle accent pill bar
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.45f)
-                        .height(2.5.dp)
-                        .clip(CircleShape)
-                        .background(accentColor),
-                )
-                Spacer(modifier = Modifier.height(2.dp))
+
                 Text(
                     text = course.name,
                     style = MaterialTheme.typography.labelMedium.copy(
