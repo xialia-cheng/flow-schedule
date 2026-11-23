@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppSettings
 import com.example.data.AppThemeMode
+import com.example.data.BackupRestoreMode
 import com.example.data.BellScheduleGenerator
 import com.example.data.CourseColorPalette
 import com.example.data.CourseEntity
@@ -471,6 +472,13 @@ class TimetableViewModel(
         }
     }
 
+    fun setFluidCloudLockscreenDetails(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setFluidCloudLockscreenDetails(enabled)
+            liveUpdateCoordinator.syncAll(rescheduleAlarms = false)
+        }
+    }
+
     // --- Import / Export / Share ---
     fun importCsvText(rawText: String, replaceExisting: Boolean) {
         viewModelScope.launch {
@@ -558,15 +566,25 @@ class TimetableViewModel(
         return timetableRepository.buildFullBackupJson()
     }
 
-    fun restoreFullBackupJson(jsonText: String) {
+    fun restoreFullBackupJson(
+        jsonText: String,
+        mode: BackupRestoreMode = BackupRestoreMode.SMART_MERGE,
+    ) {
         viewModelScope.launch {
-            val result = timetableRepository.restoreFullBackupJson(jsonText)
+            val result = timetableRepository.restoreFullBackupWithMode(jsonText, mode)
             if (result == null) {
-                emitMessage("JSON 备份格式无效，无法恢复")
+                emitMessage("JSON 备份格式无效，原有数据未作任何改动")
             } else {
                 _selectedWeekOverride.value = null
                 _selectedDateMillis.value = DateTimeUtils.startOfDayMillis(System.currentTimeMillis())
-                emitMessage("备份已恢复：导入 ${result.first} 门课程、${result.second} 条日程")
+                val skippedPart = if (result.skippedDuplicates > 0) {
+                    "（已自动跳过 ${result.skippedDuplicates} 条重复项）"
+                } else {
+                    ""
+                }
+                emitMessage(
+                    "备份已恢复：导入 ${result.coursesImported} 门课程、${result.schedulesImported} 条日程$skippedPart",
+                )
             }
         }
     }

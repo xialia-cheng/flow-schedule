@@ -30,6 +30,23 @@ object OpenAiCompatibleClient {
     private const val CONNECT_TIMEOUT_MS = 12_000
     private const val READ_TIMEOUT_MS = 22_000
 
+    fun isValidHttpsUrl(rawBaseUrl: String): Boolean {
+        val trimmed = rawBaseUrl.trim()
+        if (!trimmed.startsWith("https://", ignoreCase = true)) return false
+        return runCatching {
+            val url = URL(trimmed)
+            url.protocol.equals("https", ignoreCase = true) && !url.host.isNullOrBlank()
+        }.getOrDefault(false)
+    }
+
+    fun extractHostOrNull(rawBaseUrl: String): String? {
+        val trimmed = rawBaseUrl.trim()
+        if (!isValidHttpsUrl(trimmed)) return null
+        return runCatching {
+            URL(trimmed).host?.takeIf { it.isNotBlank() }
+        }.getOrNull()
+    }
+
     fun normalizeChatCompletionsUrl(rawBaseUrl: String): String {
         val trimmed = rawBaseUrl.trim().trimEnd('/')
         if (trimmed.isEmpty()) return ""
@@ -42,10 +59,10 @@ object OpenAiCompatibleClient {
 
     suspend fun testConnection(config: CustomAiConfig): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val endpoint = normalizeChatCompletionsUrl(config.baseUrl)
-            require(endpoint.startsWith("https://") || endpoint.startsWith("http://")) {
-                "Base URL 需以 https:// 或 http:// 开头"
+            require(isValidHttpsUrl(config.baseUrl)) {
+                "为保障密钥传输安全，Base URL 必须使用 https://（禁止 http:// 明文连接）"
             }
+            val endpoint = normalizeChatCompletionsUrl(config.baseUrl)
             require(config.apiKey.isNotBlank()) { "请先填写 API Key" }
             require(config.model.isNotBlank()) { "请先填写模型名称" }
 
@@ -76,10 +93,10 @@ object OpenAiCompatibleClient {
         defaultTotalWeeks: Int,
     ): Result<List<SmartParsedDraft>> = withContext(Dispatchers.IO) {
         runCatching {
-            val endpoint = normalizeChatCompletionsUrl(config.baseUrl)
-            require(endpoint.startsWith("https://") || endpoint.startsWith("http://")) {
-                "无效的 Base URL"
+            require(isValidHttpsUrl(config.baseUrl)) {
+                "无效的 Base URL：仅支持 https:// 安全连接"
             }
+            val endpoint = normalizeChatCompletionsUrl(config.baseUrl)
 
             val nowStr = SimpleDateFormat("yyyy-MM-dd HH:mm (EEEE)", Locale.CHINA).format(Date(nowMillis))
             val systemPrompt = """

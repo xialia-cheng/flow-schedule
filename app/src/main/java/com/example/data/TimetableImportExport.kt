@@ -1038,6 +1038,11 @@ object TimetableImportExport {
     fun parseFullBackupJson(jsonText: String): FullBackupPayload? {
         return runCatching {
             val root = JSONObject(jsonText.trim())
+            val hasRecognizedKey = root.has("timetables") ||
+                root.has("courses") ||
+                root.has("sectionTimes") ||
+                root.has("schedules")
+            if (!hasRecognizedKey) return null
             val timetables = mutableListOf<TimetableEntity>()
             val ttArr = root.optJSONArray("timetables")
             if (ttArr != null) {

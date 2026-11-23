@@ -104,6 +104,17 @@ data class CourseEntity(
         return "@$effective"
     }
 
+    /**
+     * Clean classroom label for dense timetable grid cards: strips campus prefixes
+     * and omits '@' so long room codes wrap cleanly without awkward line breaks.
+     */
+    fun gridDisplayLocation(): String {
+        val raw = location.trim().removePrefix("@").trim()
+        if (raw.isEmpty()) return ""
+        val shortened = CAMPUS_PREFIX_REGEX.replaceFirst(raw, "").trim()
+        return shortened.ifEmpty { raw }
+    }
+
     fun resolvedColorStyle(): CourseColorStyle {
         return CourseColorPalette.resolveStyle(colorIndex, customColorHex)
     }

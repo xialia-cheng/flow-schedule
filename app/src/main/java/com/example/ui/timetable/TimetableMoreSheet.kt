@@ -105,6 +105,7 @@ fun TimetableMoreSheet(
     onSetCourseReminderLeadMinutes: (Int) -> Unit,
     onSetDndLevel: (DndLevel) -> Unit,
     onSetFluidCloudDisplayOptions: (showLocation: Boolean, showTeacher: Boolean, showNotes: Boolean) -> Unit,
+    onSetFluidCloudLockscreenDetails: (Boolean) -> Unit,
     onSetThemeMode: (AppThemeMode) -> Unit,
     onSetCompactMode: (Boolean) -> Unit,
     onOpenPermissions: () -> Unit,
@@ -453,10 +454,12 @@ fun TimetableMoreSheet(
             showLocation = state.settings.fluidCloudShowLocation,
             showTeacher = state.settings.fluidCloudShowTeacher,
             showNotes = state.settings.fluidCloudShowNotes,
+            lockscreenDetails = state.settings.fluidCloudLockscreenDetails,
             onToggleEnabled = onSetCourseReminderEnabled,
             onSelectLeadMinutes = onSetCourseReminderLeadMinutes,
             onSelectDndLevel = onSetDndLevel,
             onSetFluidCloudDisplayOptions = onSetFluidCloudDisplayOptions,
+            onSetLockscreenDetails = onSetFluidCloudLockscreenDetails,
             onOpenPermissions = {
                 showReminderDialog = false
                 onDismiss()
@@ -843,9 +846,9 @@ private fun TimetableSettingsDialog(
                             )
                         }
                         Slider(
-                            value = rowHeightDp.toFloat(),
+                            value = rowHeightDp.toFloat().coerceIn(54f, 108f),
                             onValueChange = { onSetRowHeightDp(it.roundToInt()) },
-                            valueRange = 48f..108f,
+                            valueRange = 54f..108f,
                             modifier = Modifier.testTag("settings_row_height_slider"),
                         )
 
@@ -1037,10 +1040,12 @@ private fun CourseReminderDialog(
     showLocation: Boolean,
     showTeacher: Boolean,
     showNotes: Boolean,
+    lockscreenDetails: Boolean,
     onToggleEnabled: (Boolean) -> Unit,
     onSelectLeadMinutes: (Int) -> Unit,
     onSelectDndLevel: (DndLevel) -> Unit,
     onSetFluidCloudDisplayOptions: (showLocation: Boolean, showTeacher: Boolean, showNotes: Boolean) -> Unit,
+    onSetLockscreenDetails: (Boolean) -> Unit,
     onOpenPermissions: () -> Unit,
     onTriggerFluidCloudTest: () -> Unit,
     onDismiss: () -> Unit,
@@ -1136,6 +1141,9 @@ private fun CourseReminderDialog(
                 }
                 SwitchSettingRow("展示备注信息", showNotes) {
                     onSetFluidCloudDisplayOptions(showLocation, showTeacher, it)
+                }
+                SwitchSettingRow("锁屏展示课程与日程详情（默认关闭）", lockscreenDetails) {
+                    onSetLockscreenDetails(it)
                 }
 
                 Button(

@@ -11,6 +11,8 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.smart.LocalKeystoreCipher
+import com.example.smart.OpenAiCompatibleClient
+import com.example.smart.SecureStorageException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -53,9 +55,16 @@ data class CustomAiConfig(
     val baseUrl: String = "",
     val apiKey: String = "",
     val model: String = "",
+    val requiresLegacyKeyReentry: Boolean = false,
 ) {
     val isReady: Boolean
-        get() = enabled && baseUrl.isNotBlank() && apiKey.isNotBlank() && model.isNotBlank()
+        get() = enabled &&
+            OpenAiCompatibleClient.isValidHttpsUrl(baseUrl) &&
+            apiKey.isNotBlank() &&
+            model.isNotBlank()
+
+    val targetHost: String?
+        get() = OpenAiCompatibleClient.extractHostOrNull(baseUrl)
 }
 
 data class AppSettings(
@@ -78,6 +87,7 @@ data class AppSettings(
     val fluidCloudShowLocation: Boolean = true,
     val fluidCloudShowTeacher: Boolean = true,
     val fluidCloudShowNotes: Boolean = false,
+    val fluidCloudLockscreenDetails: Boolean = false,
     val morningExerciseCheckedDate: String = "",
     val totalFocusMinutes: Int = 0,
     val focusDurationMinutes: Int = 25,
@@ -114,6 +124,7 @@ class UserPreferencesRepository(private val context: Context) {
         val FLUID_CLOUD_SHOW_LOCATION = booleanPreferencesKey("fluid_cloud_show_location")
         val FLUID_CLOUD_SHOW_TEACHER = booleanPreferencesKey("fluid_cloud_show_teacher")
         val FLUID_CLOUD_SHOW_NOTES = booleanPreferencesKey("fluid_cloud_show_notes")
+        val FLUID_CLOUD_LOCKSCREEN_DETAILS = booleanPreferencesKey("fluid_cloud_lockscreen_details")
         val MORNING_EXERCISE_CHECKED_DATE = stringPreferencesKey("morning_exercise_checked_date")
         val TOTAL_FOCUS_MINUTES = intPreferencesKey("total_focus_minutes")
         val FOCUS_DURATION_MINUTES = intPreferencesKey("focus_duration_minutes")
@@ -145,10 +156,10 @@ class UserPreferencesRepository(private val context: Context) {
         }.getOrDefault(DndLevel.PRIORITY)
 
         val encryptedKey = prefs[Keys.CUSTOM_AI_API_KEY_ENC].orEmpty()
-        val decryptedKey = if (encryptedKey.isNotBlank()) {
-            LocalKeystoreCipher.decrypt(encryptedKey)
+        val decryptResult = if (encryptedKey.isNotBlank()) {
+            LocalKeystoreCipher.decryptWithStatus(encryptedKey)
         } else {
-            ""
+            com.example.smart.DecryptResult("")
         }
 
         AppSettings(
@@ -163,7 +174,7 @@ class UserPreferencesRepository(private val context: Context) {
             showNonCurrentWeekCourses = prefs[Keys.SHOW_NON_CURRENT_WEEK] ?: true,
             showWeekend = prefs[Keys.SHOW_WEEKEND] ?: true,
             weekStartDay = weekStartDay,
-            timetableRowHeightDp = (prefs[Keys.TIMETABLE_ROW_HEIGHT_DP] ?: 72).coerceIn(48, 108),
+            timetableRowHeightDp = (prefs[Keys.TIMETABLE_ROW_HEIGHT_DP] ?: 72).coerceIn(54, 108),
             timetableFontScale = (prefs[Keys.TIMETABLE_FONT_SCALE] ?: 1.0f).coerceIn(0.80f, 1.35f),
             courseReminderEnabled = prefs[Keys.COURSE_REMINDER_ENABLED] ?: true,
             courseReminderLeadMinutes = (prefs[Keys.COURSE_REMINDER_LEAD_MINUTES] ?: 15).coerceIn(0, 120),
@@ -171,6 +182,7 @@ class UserPreferencesRepository(private val context: Context) {
             fluidCloudShowLocation = prefs[Keys.FLUID_CLOUD_SHOW_LOCATION] ?: true,
             fluidCloudShowTeacher = prefs[Keys.FLUID_CLOUD_SHOW_TEACHER] ?: true,
             fluidCloudShowNotes = prefs[Keys.FLUID_CLOUD_SHOW_NOTES] ?: false,
+            fluidCloudLockscreenDetails = prefs[Keys.FLUID_CLOUD_LOCKSCREEN_DETAILS] ?: false,
             morningExerciseCheckedDate = prefs[Keys.MORNING_EXERCISE_CHECKED_DATE] ?: "",
             totalFocusMinutes = prefs[Keys.TOTAL_FOCUS_MINUTES] ?: 0,
             focusDurationMinutes = (prefs[Keys.FOCUS_DURATION_MINUTES] ?: 25).coerceIn(1, 180),
@@ -182,8 +194,9 @@ class UserPreferencesRepository(private val context: Context) {
             customAiConfig = CustomAiConfig(
                 enabled = prefs[Keys.CUSTOM_AI_ENABLED] ?: false,
                 baseUrl = prefs[Keys.CUSTOM_AI_BASE_URL].orEmpty(),
-                apiKey = decryptedKey,
+                apiKey = decryptResult.plainText,
                 model = prefs[Keys.CUSTOM_AI_MODEL].orEmpty(),
+                requiresLegacyKeyReentry = decryptResult.requiresLegacyMigration,
             ),
         )
     }
@@ -235,7 +248,7 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setTimetableRowHeightDp(heightDp: Int) {
         context.userPreferencesDataStore.edit {
-            it[Keys.TIMETABLE_ROW_HEIGHT_DP] = heightDp.coerceIn(48, 108)
+            it[Keys.TIMETABLE_ROW_HEIGHT_DP] = heightDp.coerceIn(54, 108)
         }
     }
 
@@ -268,6 +281,12 @@ class UserPreferencesRepository(private val context: Context) {
             prefs[Keys.FLUID_CLOUD_SHOW_LOCATION] = showLocation
             prefs[Keys.FLUID_CLOUD_SHOW_TEACHER] = showTeacher
             prefs[Keys.FLUID_CLOUD_SHOW_NOTES] = showNotes
+        }
+    }
+
+    suspend fun setFluidCloudLockscreenDetails(enabled: Boolean) {
+        context.userPreferencesDataStore.edit { prefs ->
+            prefs[Keys.FLUID_CLOUD_LOCKSCREEN_DETAILS] = enabled
         }
     }
 
@@ -337,6 +356,7 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    @Throws(SecureStorageException::class, IllegalArgumentException::class)
     suspend fun saveCustomAiConfig(
         enabled: Boolean,
         baseUrl: String,
@@ -346,6 +366,9 @@ class UserPreferencesRepository(private val context: Context) {
         val cleanUrl = baseUrl.trim()
         val cleanKey = apiKey.trim()
         val cleanModel = model.trim()
+        if (cleanUrl.isNotBlank() && !OpenAiCompatibleClient.isValidHttpsUrl(cleanUrl)) {
+            throw IllegalArgumentException("Base URL 必须使用 https:// 安全连接")
+        }
         val encryptedKey = if (cleanKey.isNotBlank()) LocalKeystoreCipher.encrypt(cleanKey) else ""
 
         context.userPreferencesDataStore.edit { prefs ->

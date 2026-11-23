@@ -1,0 +1,518 @@
+package com.example.ui.mine
+
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.BuildConfig
+import com.example.ui.theme.FlowTheme
+import com.example.ui.theme.MonoFontFamily
+
+private const val AUTHOR_NAME = "xialia cheng"
+private const val AUTHOR_EMAIL = "zly080701@gmail.com"
+private const val REPO_URL = "https://github.com/xialia150-wq/flow-schedule"
+
+private val MIT_LICENSE_FULL_TEXT = """
+MIT License
+
+Copyright (c) 2026 xialia cheng
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+""".trimIndent()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AboutHelpLicenseSheet(
+    onDismiss: () -> Unit,
+    onShowMessage: (String) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val colorScheme = MaterialTheme.colorScheme
+    val flowColors = FlowTheme.colors
+    val context = LocalContext.current
+    var licenseExpanded by rememberSaveable { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+                .testTag("about_help_license_sheet"),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            // Sheet Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "关于应用、帮助与开源协议",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "流云日程（FlowSchedule）· 版本与开源信息",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("about_sheet_close"),
+                ) {
+                    Text("关闭")
+                }
+            }
+
+            // 1. 关于应用与作者
+            AboutSectionCard(
+                icon = Icons.Rounded.Info,
+                title = "1. 关于应用与作者",
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "流云日程（FlowSchedule）",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = colorScheme.onSurface,
+                            )
+                            Text(
+                                text = "专注高校课表、日程倒计时与实时状态通知",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Surface(
+                            shape = CircleShape,
+                            color = colorScheme.primaryContainer,
+                        ) {
+                            Text(
+                                text = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                                fontFamily = MonoFontFamily,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .padding(horizontal = 9.dp, vertical = 4.dp)
+                                    .testTag("about_version_text"),
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = colorScheme.outlineVariant)
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Person,
+                            contentDescription = "作者",
+                            tint = colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "作者：$AUTHOR_NAME",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colorScheme.onSurface,
+                        )
+                    }
+
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = colorScheme.surfaceContainerLow,
+                        border = BorderStroke(1.dp, colorScheme.outlineVariant),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .clickable {
+                                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("mailto:$AUTHOR_EMAIL")
+                                    putExtra(Intent.EXTRA_SUBJECT, "流云日程（FlowSchedule v${BuildConfig.VERSION_NAME}）反馈")
+                                }
+                                runCatching { context.startActivity(intent) }.onFailure {
+                                    onShowMessage("未检测到系统邮件应用，请手动联系 $AUTHOR_EMAIL")
+                                }
+                            }
+                            .testTag("about_email_button"),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Email,
+                                    contentDescription = "联系邮箱",
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Column {
+                                    Text(
+                                        text = "联系邮箱",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        text = AUTHOR_EMAIL,
+                                        fontFamily = MonoFontFamily,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colorScheme.primary,
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                contentDescription = "打开系统邮件应用",
+                                tint = colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = colorScheme.surfaceContainerLow,
+                        border = BorderStroke(1.dp, colorScheme.outlineVariant),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .clickable {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(REPO_URL))
+                                runCatching { context.startActivity(intent) }.onFailure {
+                                    onShowMessage("无法打开浏览器，请访问：$REPO_URL")
+                                }
+                            }
+                            .testTag("about_repo_button"),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Code,
+                                    contentDescription = "开源仓库",
+                                    tint = flowColors.liveAccent,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Column {
+                                    Text(
+                                        text = "GitHub 开源仓库",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        text = REPO_URL,
+                                        fontFamily = MonoFontFamily,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colorScheme.primary,
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                contentDescription = "在浏览器中打开仓库",
+                                tint = colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2. 使用帮助与权限说明
+            AboutSectionCard(
+                icon = Icons.AutoMirrored.Rounded.HelpOutline,
+                title = "2. 使用帮助与权限说明",
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HelpBulletItem(
+                        heading = "精确闹钟与后台无限制 / 自启动",
+                        body = "请在系统设置中授予“闹钟和提醒”精确闹钟权限，并将本应用的电池策略设为“无限制”（ColorOS / 澎湃 OS 等系统建议同时允许自启动），以确保课前提醒、00:00 跨天更新与下课自动消隐胶囊在息屏后台状态下准时触发。",
+                    )
+                    HelpBulletItem(
+                        heading = "ColorOS 17 流体云 / 实时通知权限",
+                        body = "在 ColorOS 17（OPPO / 一加）及适配 Android 16 原生 Live Updates 的设备上，需开启通知权限与“实时活动（流体云）”权限以显示状态栏动态胶囊。其他未接管 Android 16 原生 Live Updates 的机型或旧版本系统将自动降级为标准高优先级进度通知（保留 Chronometer 实时倒计时与快捷操作，不影响提醒）。",
+                    )
+                    HelpBulletItem(
+                        heading = "系统勿扰权限开启方法",
+                        body = "前往「我的 -> 通知与免打扰设置」点击“去授权”，或在系统「设置 -> 隐私 / 权限 -> 勿扰权限」中允许流云日程控制勿扰状态，即可在专注或上课期间自动切换静音级别，并在结束后自动恢复。",
+                    )
+                }
+            }
+
+            // 3. 隐私与数据声明
+            AboutSectionCard(
+                icon = Icons.Rounded.Lock,
+                title = "3. 隐私与数据声明",
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HelpBulletItem(
+                        heading = "100% 本地离线存储",
+                        body = "您的全部课表、节次作息、日程记录与专注统计仅保存在设备本地（Room / DataStore），应用不包含任何广告 SDK、行为统计追踪或后台数据上传逻辑。",
+                    )
+                    HelpBulletItem(
+                        heading = "Android 自动备份凭据隔离",
+                        body = "已在系统自动备份与数据提取规则中明确排除本地加密偏好文件与运行态缓存，防止敏感凭据或 API Key 密文同步至云端；使用「自定义 AI」配置的密钥经由 Android Keystore AES-256 硬件级加密保存。",
+                    )
+                    HelpBulletItem(
+                        heading = "自定义 AI 接口外发说明",
+                        body = "仅当您主动开启「自定义 AI」并填写有效的 https:// 接口地址时，在触发“一句话创建”的当次才会将您的单次输入文本、当前日期时间与默认学期总周数发送至您自行指定的接口服务，绝不会上传本地已有课表或日程。",
+                    )
+                }
+            }
+
+            // 4. 开源协议（MIT License）
+            AboutSectionCard(
+                icon = Icons.Rounded.Description,
+                title = "4. 开源协议（MIT License）",
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "本项目遵循 MIT License 开源许可协议发布：",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "Copyright (c) 2026 $AUTHOR_NAME",
+                        fontFamily = MonoFontFamily,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.onSurface,
+                    )
+
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = colorScheme.surfaceContainerLow,
+                        border = BorderStroke(1.dp, colorScheme.outlineVariant),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .clickable { licenseExpanded = !licenseExpanded }
+                            .testTag("about_mit_toggle"),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = if (licenseExpanded) "收起 MIT License 全文" else "点击展开查看标准 MIT 协议全文",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colorScheme.primary,
+                            )
+                            Icon(
+                                imageVector = if (licenseExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                contentDescription = if (licenseExpanded) "收起协议全文" else "展开协议全文",
+                                tint = colorScheme.primary,
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = licenseExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = colorScheme.surfaceContainerHighest.copy(alpha = 0.65f),
+                            border = BorderStroke(1.dp, colorScheme.outlineVariant),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("about_mit_full_text"),
+                        ) {
+                            Text(
+                                text = MIT_LICENSE_FULL_TEXT,
+                                fontFamily = MonoFontFamily,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp,
+                                color = colorScheme.onSurface,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutSectionCard(
+    icon: ImageVector,
+    title: String,
+    content: @Composable () -> Unit,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val flowColors = FlowTheme.colors
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = flowColors.cardElevated,
+        border = BorderStroke(1.dp, colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    modifier = Modifier.size(28.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = colorScheme.onSurface,
+                )
+            }
+            content()
+        }
+    }
+}
+
+@Composable
+private fun HelpBulletItem(
+    heading: String,
+    body: String,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            text = "• $heading",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = colorScheme.onSurface,
+        )
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodySmall,
+            lineHeight = 18.sp,
+            color = colorScheme.onSurfaceVariant,
+        )
+    }
+}

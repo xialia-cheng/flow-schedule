@@ -9,6 +9,13 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+class SecureStorageException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+data class DecryptResult(
+    val plainText: String,
+    val requiresLegacyMigration: Boolean = false,
+)
+
 /**
  * Encrypts sensitive user-provided credentials (such as an optional custom OpenAI-compatible API key)
  * locally using an Android Keystore AES-256-GCM key before storing them in DataStore.
@@ -19,11 +26,13 @@ object LocalKeystoreCipher {
     private const val KEY_ALIAS = "flow_schedule_custom_ai_key_v1"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val PREFIX_ENC = "KS_GCM_V1:"
+    private const val PREFIX_LEGACY_OBF = "OBF_V1:"
     private const val GCM_TAG_BITS = 128
 
+    @Throws(SecureStorageException::class)
     fun encrypt(plainText: String): String {
         if (plainText.isBlank()) return ""
-        return runCatching {
+        try {
             val secretKey = getOrCreateSecretKey()
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, secretKey)
@@ -33,36 +42,39 @@ object LocalKeystoreCipher {
             combined[0] = iv.size.toByte()
             System.arraycopy(iv, 0, combined, 1, iv.size)
             System.arraycopy(cipherBytes, 0, combined, 1 + iv.size, cipherBytes.size)
-            PREFIX_ENC + Base64.encodeToString(combined, Base64.NO_WRAP)
-        }.getOrElse {
-            // Fallback for headless JVM unit tests where AndroidKeyStore provider is unavailable
-            "OBF_V1:" + Base64.encodeToString(plainText.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+            return PREFIX_ENC + Base64.encodeToString(combined, Base64.NO_WRAP)
+        } catch (e: Exception) {
+            throw SecureStorageException("系统安全密钥库（Android Keystore）不可用，已拒绝明文存储密钥", e)
         }
     }
 
-    fun decrypt(storedValue: String): String {
-        if (storedValue.isBlank()) return ""
+    fun decryptWithStatus(storedValue: String): DecryptResult {
+        if (storedValue.isBlank()) return DecryptResult("")
         return when {
             storedValue.startsWith(PREFIX_ENC) -> runCatching {
                 val payload = Base64.decode(storedValue.removePrefix(PREFIX_ENC), Base64.NO_WRAP)
-                if (payload.isEmpty()) return ""
+                if (payload.isEmpty()) return DecryptResult("")
                 val ivLength = payload[0].toInt() and 0xFF
-                if (payload.size <= 1 + ivLength) return ""
+                if (payload.size <= 1 + ivLength) return DecryptResult("")
                 val iv = payload.copyOfRange(1, 1 + ivLength)
                 val cipherBytes = payload.copyOfRange(1 + ivLength, payload.size)
                 val secretKey = getOrCreateSecretKey()
                 val cipher = Cipher.getInstance(TRANSFORMATION)
                 cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(GCM_TAG_BITS, iv))
-                String(cipher.doFinal(cipherBytes), Charsets.UTF_8)
-            }.getOrDefault("")
+                DecryptResult(String(cipher.doFinal(cipherBytes), Charsets.UTF_8))
+            }.getOrDefault(DecryptResult(""))
 
-            storedValue.startsWith("OBF_V1:") -> runCatching {
-                String(Base64.decode(storedValue.removePrefix("OBF_V1:"), Base64.NO_WRAP), Charsets.UTF_8)
-            }.getOrDefault("")
+            storedValue.startsWith(PREFIX_LEGACY_OBF) -> {
+                DecryptResult(plainText = "", requiresLegacyMigration = true)
+            }
 
-            else -> storedValue
+            else -> {
+                DecryptResult(plainText = "", requiresLegacyMigration = true)
+            }
         }
     }
+
+    fun decrypt(storedValue: String): String = decryptWithStatus(storedValue).plainText
 
     private fun getOrCreateSecretKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }

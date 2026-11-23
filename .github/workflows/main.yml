@@ -31,29 +31,68 @@ jobs:
         with:
           gradle-version: "9.3.1"
 
+      - name: Ensure debug.keystore for debug/lint tasks
+        run: |
+          if [ ! -f debug.keystore ]; then
+            keytool -genkeypair -noprompt -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
       - name: Run Unit Tests & Lint
         run: gradle testDebugUnitTest lintDebug --no-daemon
 
+      - name: Check Release Signing Secrets
+        id: release_secrets
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+              echo "::error::Missing RELEASE_KEYSTORE_BASE64, KEYSTORE_PASSWORD, or KEY_PASSWORD repository secrets required for Release tag build."
+              exit 1
+            else
+              echo "::warning::Release signing secrets not configured yet; building Debug APK instead."
+            fi
+          fi
+
       - name: Decode Release Keystore
+        if: steps.release_secrets.outputs.available == 'true'
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
 
       - name: Build Release APK
+        if: steps.release_secrets.outputs.available == 'true'
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle assembleRelease --no-daemon
 
+      - name: Build Debug APK (Fallback without Release Secrets)
+        if: steps.release_secrets.outputs.available != 'true'
+        run: gradle assembleDebug --no-daemon
+
       - name: Upload Release APK Artifact
+        if: steps.release_secrets.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: FlowSchedule-release-apk
           path: app/build/outputs/apk/release/*.apk
 
+      - name: Upload Debug APK Artifact
+        if: steps.release_secrets.outputs.available != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlowSchedule-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && steps.release_secrets.outputs.available == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/*.apk

@@ -23,12 +23,7 @@ import com.example.MainActivity
 import com.example.R
 import com.example.data.DateTimeUtils
 import com.example.data.DndLevel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -60,8 +55,6 @@ class LiveUpdateManager(private val context: Context) {
     private var lastPromotableCharacteristics: Boolean? = null
 
     private var activeFocusItem: LiveActivityItem? = null
-    private var progressTickerJob: Job? = null
-    private var lastSyncedCandidates: List<LiveActivityItem> = emptyList()
 
     private var dndEnabledByApp: Boolean
         get() = runtimePrefs.getBoolean(KEY_DND_ENABLED_BY_APP, false)
@@ -106,7 +99,7 @@ class LiveUpdateManager(private val context: Context) {
                     NotificationManager.IMPORTANCE_HIGH,
                 ).apply {
                     description = context.getString(R.string.channel_live_updates_desc)
-                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    lockscreenVisibility = Notification.VISIBILITY_PRIVATE
                     setShowBadge(true)
                     enableVibration(true)
                 }
@@ -280,6 +273,7 @@ class LiveUpdateManager(private val context: Context) {
         startTimeMillis: Long,
         endTimeMillis: Long,
         accentColorArgb: Int,
+        showLockscreenDetails: Boolean = false,
         nowMillis: Long = System.currentTimeMillis(),
     ): LiveActivityItem {
         val focusItem = LiveActivityItem(
@@ -296,6 +290,7 @@ class LiveUpdateManager(private val context: Context) {
             showLocation = false,
             showTeacher = false,
             showNotes = false,
+            showLockscreenDetails = showLockscreenDetails,
         )
         activeFocusItem = focusItem
         syncLiveActivity(
@@ -327,7 +322,6 @@ class LiveUpdateManager(private val context: Context) {
         ensureNotificationChannel()
         purgeExpiredNotificationIfNeeded(nowMillis)
 
-        lastSyncedCandidates = candidates
         val mergedCandidates = buildList {
             addAll(candidates)
             val focus = activeFocusItem
@@ -365,12 +359,11 @@ class LiveUpdateManager(private val context: Context) {
 
         val isInProgress = activeItem.isInProgress(nowMillis)
         val targetMillis = if (isInProgress) activeItem.endTimeMillis else activeItem.startTimeMillis
-        val progressBucket = activeItem.progressPermille(nowMillis) / 10
+        val progressBucket = activeItem.progressPermille(nowMillis) / 50
         val dndActive = isDoNotDisturbActive()
         val colorKey = activeItem.accentColorArgb ?: 0
-        val displayMetaKey = "${activeItem.showLocation}:${activeItem.showTeacher}:${activeItem.showNotes}:${activeItem.title}:${activeItem.isBreakPhase}"
-        val stageIconBucket = resolveStageBucket(activeItem, nowMillis)
-        val postSignature = "${activeItem.uniqueKey}|$isInProgress|$stageIconBucket|$targetMillis|$dndActive|$progressBucket|$colorKey|$displayMetaKey"
+        val displayMetaKey = "${activeItem.showLocation}:${activeItem.showTeacher}:${activeItem.showNotes}:${activeItem.showLockscreenDetails}:${activeItem.title}:${activeItem.isBreakPhase}"
+        val postSignature = "${activeItem.uniqueKey}|$isInProgress|$targetMillis|$dndActive|$progressBucket|$colorKey|$displayMetaKey"
 
         // Avoid redundant notify() calls that would interrupt SystemUI's native Chronometer ticker
         if (!forceAlert && postSignature == currentlyPostedSignature) {
@@ -398,7 +391,6 @@ class LiveUpdateManager(private val context: Context) {
             notificationManager.notify(LIVE_UPDATE_NOTIFICATION_ID, notification)
         }
         refreshPermissionStatus()
-        ensureProgressTickerRunning()
         return activeItem
     }
 
@@ -417,29 +409,7 @@ class LiveUpdateManager(private val context: Context) {
         }
     }
 
-    private fun ensureProgressTickerRunning() {
-        if (progressTickerJob?.isActive == true) return
-        progressTickerJob = CoroutineScope(Dispatchers.Default).launch {
-            while (_activeLiveActivity.value != null) {
-                delay(5_000L)
-                val current = _activeLiveActivity.value ?: break
-                val now = System.currentTimeMillis()
-                if (now >= current.endTimeMillis) {
-                    cancelLiveUpdate()
-                    break
-                }
-                syncLiveActivity(
-                    candidates = lastSyncedCandidates,
-                    nowMillis = now,
-                    forceAlert = false,
-                )
-            }
-        }
-    }
-
     fun cancelLiveUpdate() {
-        progressTickerJob?.cancel()
-        progressTickerJob = null
         notificationManager.cancel(LIVE_UPDATE_NOTIFICATION_ID)
         currentlyPostedKey = null
         currentlyPostedSourceId = null
@@ -448,24 +418,6 @@ class LiveUpdateManager(private val context: Context) {
         _activeLiveActivity.value = null
         restoreDndIfEnabledByApp()
         refreshPermissionStatus()
-    }
-
-    private fun resolveStageBucket(item: LiveActivityItem, nowMillis: Long): Int {
-        if (!item.isInProgress(nowMillis)) return 0 // 课前准备
-        val remainingMillis = (item.endTimeMillis - nowMillis).coerceAtLeast(0L)
-        return if (remainingMillis <= 10 * 60_000L) 2 else 1 // 2 = 即将结束(<=10分钟), 1 = 正在进行
-    }
-
-    private fun resolveSmallIconRes(item: LiveActivityItem, nowMillis: Long): Int {
-        return when (resolveStageBucket(item, nowMillis)) {
-            0 -> R.drawable.ic_stat_course_prep
-            2 -> R.drawable.ic_stat_course_ending
-            else -> if (item.sourceType == LiveActivitySourceType.COURSE) {
-                R.drawable.ic_stat_course_live
-            } else {
-                R.drawable.ic_stat_flow_schedule
-            }
-        }
     }
 
     @RequiresApi(ANDROID_16_API_LEVEL)
@@ -509,7 +461,11 @@ class LiveUpdateManager(private val context: Context) {
         val activeSegmentColor = baseAccentColor
         val milestonePointColor = blendColorArgb(baseAccentColor, Color.WHITE, 0.62f)
         val themeAccentColor = baseAccentColor
-        val smallIconRes = resolveSmallIconRes(item, nowMillis)
+        val smallIconRes = if (item.sourceType == LiveActivitySourceType.COURSE) {
+            R.drawable.ic_stat_course_live
+        } else {
+            R.drawable.ic_stat_flow_schedule
+        }
 
         // Distinct 2-stage segmented ProgressStyle dynamically tinted with current course/schedule color
         val progressStyle = Notification.ProgressStyle()
@@ -526,7 +482,11 @@ class LiveUpdateManager(private val context: Context) {
                             Notification.ProgressStyle.Segment(700).setColor(activeSegmentColor),
                         ),
                     )
-                    setProgressPoints(emptyList())
+                    setProgressPoints(
+                        listOf(
+                            Notification.ProgressStyle.Point(300).setColor(milestonePointColor),
+                        ),
+                    )
                 } else {
                     setProgressSegments(
                         listOf(
@@ -554,6 +514,12 @@ class LiveUpdateManager(private val context: Context) {
             putLong(EXTRA_LIVE_END_TIME_MILLIS, item.endTimeMillis)
         }
 
+        val visibility = if (item.showLockscreenDetails) {
+            Notification.VISIBILITY_PUBLIC
+        } else {
+            Notification.VISIBILITY_PRIVATE
+        }
+
         // Do NOT call setShortCriticalText() during countdowns: leaving it unset allows SystemUI
         // to drive the status bar Fluid Cloud capsule directly from the native Chronometer timer.
         // setTimeoutAfter() guarantees NotificationManagerService forcibly dismisses the notification
@@ -568,7 +534,20 @@ class LiveUpdateManager(private val context: Context) {
             .setOngoing(true)
             .setOnlyAlertOnce(silentUpdate)
             .setCategory(Notification.CATEGORY_EVENT)
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setVisibility(visibility)
+            .apply {
+                if (!item.showLockscreenDetails) {
+                    setPublicVersion(
+                        buildRedactedPublicNotification(
+                            item = item,
+                            targetMillis = targetMillis,
+                            remainingEndMillis = remainingEndMillis,
+                            themeAccentColor = themeAccentColor,
+                            smallIconRes = smallIconRes,
+                        ),
+                    )
+                }
+            }
             .setContentIntent(createContentPendingIntent(item))
             .setDeleteIntent(
                 createActionPendingIntent(LiveUpdateActionReceiver.ACTION_DISMISSED, item, 103),
@@ -613,11 +592,21 @@ class LiveUpdateManager(private val context: Context) {
         val contentText = item.expandedContentText(nowMillis)
         val themeAccentColor = item.accentColorArgb
             ?: if (isInProgress) COLOR_ACCENT_ACTIVE else COLOR_ACCENT_PREP
-        val smallIconRes = resolveSmallIconRes(item, nowMillis)
+        val smallIconRes = if (item.sourceType == LiveActivitySourceType.COURSE) {
+            R.drawable.ic_stat_course_live
+        } else {
+            R.drawable.ic_stat_flow_schedule
+        }
 
         val remainingEndMillis = (item.endTimeMillis - nowMillis).coerceAtLeast(1_000L)
         val liveExtras = Bundle().apply {
             putLong(EXTRA_LIVE_END_TIME_MILLIS, item.endTimeMillis)
+        }
+
+        val visibility = if (item.showLockscreenDetails) {
+            NotificationCompat.VISIBILITY_PUBLIC
+        } else {
+            NotificationCompat.VISIBILITY_PRIVATE
         }
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
@@ -638,7 +627,20 @@ class LiveUpdateManager(private val context: Context) {
             .addExtras(liveExtras)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(visibility)
+            .apply {
+                if (!item.showLockscreenDetails) {
+                    setPublicVersion(
+                        buildRedactedPublicNotification(
+                            item = item,
+                            targetMillis = targetMillis,
+                            remainingEndMillis = remainingEndMillis,
+                            themeAccentColor = themeAccentColor,
+                            smallIconRes = smallIconRes,
+                        ),
+                    )
+                }
+            }
             .setContentIntent(createContentPendingIntent(item))
             .setDeleteIntent(
                 createActionPendingIntent(LiveUpdateActionReceiver.ACTION_DISMISSED, item, 103),
@@ -653,6 +655,34 @@ class LiveUpdateManager(private val context: Context) {
                 context.getString(R.string.action_end_now),
                 createActionPendingIntent(LiveUpdateActionReceiver.ACTION_COMPLETE, item, 101),
             )
+            .build()
+    }
+
+    private fun buildRedactedPublicNotification(
+        item: LiveActivityItem,
+        targetMillis: Long,
+        remainingEndMillis: Long,
+        themeAccentColor: Int,
+        smallIconRes: Int,
+    ): Notification {
+        val safeTitle = when {
+            item.sourceType == LiveActivitySourceType.FOCUS && item.isBreakPhase -> "专注休息进行中"
+            item.sourceType == LiveActivitySourceType.FOCUS -> "专注学习进行中"
+            item.sourceType == LiveActivitySourceType.COURSE -> "课程安排进行中"
+            else -> "日程安排进行中"
+        }
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(smallIconRes)
+            .setColor(themeAccentColor)
+            .setContentTitle(safeTitle)
+            .setContentText("已隐藏教室、教师与备注详情，解锁查看完整内容")
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setWhen(targetMillis)
+            .setShowWhen(true)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(true)
+            .setTimeoutAfter(remainingEndMillis)
             .build()
     }
 

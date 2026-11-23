@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.NetworkCheck
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
@@ -49,7 +50,10 @@ import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.WarningAmber
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -61,6 +65,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -88,10 +93,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
 import com.example.R
 import com.example.data.AppThemeMode
+import com.example.data.BackupRestoreMode
 import com.example.data.CustomAiConfig
 import com.example.data.DndLevel
+import com.example.data.FullBackupPayload
+import com.example.data.TimetableImportExport
 import com.example.data.WeekStartDay
 import com.example.notification.LiveUpdatePermissionStatus
+import com.example.smart.OpenAiCompatibleClient
 import com.example.ui.ScheduleViewModel
 import com.example.ui.smart.SmartCaptureViewModel
 import com.example.ui.theme.FlowTheme
@@ -140,6 +149,9 @@ fun MineScreen(
         }
     }
 
+    var pendingBackupPreview by remember { mutableStateOf<Pair<String, FullBackupPayload>?>(null) }
+    var showAboutSheet by rememberSaveable { mutableStateOf(false) }
+
     val importBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -153,7 +165,12 @@ fun MineScreen(
                 if (jsonText.isNullOrBlank()) {
                     onShowMessage("无法读取该 JSON 备份文件")
                 } else {
-                    timetableViewModel.restoreFullBackupJson(jsonText)
+                    val parsed = TimetableImportExport.parseFullBackupJson(jsonText)
+                    if (parsed == null) {
+                        onShowMessage("JSON 备份格式无效，原有数据未作任何改动")
+                    } else {
+                        pendingBackupPreview = jsonText to parsed
+                    }
                 }
             }
         }
@@ -503,6 +520,15 @@ fun MineScreen(
                                 },
                                 testTag = "mine_switch_fc_notes",
                             )
+                            MineSwitchRow(
+                                title = "锁屏展示课程与日程详情",
+                                subtitle = "默认关闭；关闭时锁屏仅显示事件名称与倒计时，隐藏地点、教师与备注",
+                                checked = settings.fluidCloudLockscreenDetails,
+                                onCheckedChange = { checked ->
+                                    timetableViewModel.setFluidCloudLockscreenDetails(checked)
+                                },
+                                testTag = "mine_switch_fc_lockscreen",
+                            )
                         }
                     }
                 }
@@ -695,14 +721,14 @@ fun MineScreen(
                                         contentDescription = null,
                                         tint = colorScheme.primary,
                                     )
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = "导出本地 JSON 备份",
                                             style = MaterialTheme.typography.titleSmall,
                                             color = colorScheme.onSurface,
                                         )
                                         Text(
-                                            text = "保存全部多课表、上课时间、日程与学习任务",
+                                            text = "明文导出全部多课表、节次与全部日程（含已完成），不含 API Key，请妥善保管",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = colorScheme.onSurfaceVariant,
                                         )
@@ -732,6 +758,7 @@ fun MineScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
@@ -740,14 +767,14 @@ fun MineScreen(
                                         contentDescription = null,
                                         tint = flowColors.liveAccent,
                                     )
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = "从本地 JSON 文件恢复",
                                             style = MaterialTheme.typography.titleSmall,
                                             color = colorScheme.onSurface,
                                         )
                                         Text(
-                                            text = "使用系统安全文件选择器导入备份，无需存储权限",
+                                            text = "先校验文件结构再选择「智能合并」或「清空覆盖」，无需存储权限",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = colorScheme.onSurfaceVariant,
                                         )
@@ -764,10 +791,132 @@ fun MineScreen(
                 }
             }
 
+            // 5. About App, Help & Open Source License
+            item(key = "about_section") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "应用信息",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        color = flowColors.cardElevated,
+                        border = BorderStroke(1.dp, colorScheme.outlineVariant),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showAboutSheet = true }
+                                .padding(horizontal = 16.dp, vertical = 14.dp)
+                                .testTag("mine_about_help_entry"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Info,
+                                    contentDescription = null,
+                                    tint = colorScheme.primary,
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "关于应用、帮助与开源协议",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = "v${BuildConfig.VERSION_NAME} · 作者、权限指南、隐私声明与 MIT 协议",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = null,
+                                tint = colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
             item(key = "mine_bottom_spacer") {
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    if (showAboutSheet) {
+        AboutHelpLicenseSheet(
+            onDismiss = { showAboutSheet = false },
+            onShowMessage = onShowMessage,
+        )
+    }
+
+    pendingBackupPreview?.let { (rawJson, payload) ->
+        AlertDialog(
+            onDismissRequest = { pendingBackupPreview = null },
+            title = {
+                Text(
+                    text = "选择 JSON 备份恢复方式",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "已解析到 ${payload.timetables.size} 张课表、${payload.courses.size} 门课程、${payload.schedules.size} 条日程（含已完成记录）。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "• 智能合并（推荐）：保留现有本地数据并自动跳过完全重复的课程与日程。\n• 清空覆盖：先清空当前所有课表、节次与日程，再按备份完全还原。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        timetableViewModel.restoreFullBackupJson(rawJson, BackupRestoreMode.SMART_MERGE)
+                        pendingBackupPreview = null
+                    },
+                    modifier = Modifier.testTag("mine_backup_restore_merge"),
+                ) {
+                    Text("智能合并")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(
+                        onClick = { pendingBackupPreview = null },
+                        modifier = Modifier.testTag("mine_backup_restore_cancel"),
+                    ) {
+                        Text("取消")
+                    }
+                    TextButton(
+                        onClick = {
+                            timetableViewModel.restoreFullBackupJson(rawJson, BackupRestoreMode.OVERWRITE_ALL)
+                            pendingBackupPreview = null
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = colorScheme.error),
+                        modifier = Modifier.testTag("mine_backup_restore_overwrite"),
+                    ) {
+                        Text("清空覆盖")
+                    }
+                }
+            },
+        )
     }
 }
 
@@ -1130,7 +1279,12 @@ private fun CustomAiSettingsCard(
         model = savedConfig.model
     }
 
-    val isConfiguredReady = enabled && baseUrl.isNotBlank() && apiKey.isNotBlank() && model.isNotBlank()
+    val isUrlValidHttps = baseUrl.isBlank() || OpenAiCompatibleClient.isValidHttpsUrl(baseUrl)
+    val isConfiguredReady = enabled &&
+        OpenAiCompatibleClient.isValidHttpsUrl(baseUrl) &&
+        apiKey.isNotBlank() &&
+        model.isNotBlank()
+    val targetHostLabel = OpenAiCompatibleClient.extractHostOrNull(baseUrl) ?: "待填写 HTTPS 接口域名"
 
     Surface(
         modifier = Modifier
@@ -1182,6 +1336,34 @@ private fun CustomAiSettingsCard(
                 )
             }
 
+            if (savedConfig.requiresLegacyKeyReentry) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = colorScheme.errorContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("ai_legacy_key_warning"),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.WarningAmber,
+                            contentDescription = null,
+                            tint = colorScheme.error,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "检测到旧版兼容格式密钥。为确保硬件级 Android Keystore 安全加密，请重新输入您的 API Key 并保存。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colorScheme.onErrorContainer,
+                        )
+                    }
+                }
+            }
+
             // Dedicated full-width status badge row directly beneath title
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -1204,7 +1386,7 @@ private fun CustomAiSettingsCard(
                             ),
                     )
                     Text(
-                        text = if (isConfiguredReady) "当前：优先自定义 AI · 断网回退离线" else "当前：纯本地离线解析",
+                        text = if (isConfiguredReady) "当前：优先自定义 AI ($targetHostLabel) · 断网回退离线" else "当前：纯本地离线解析",
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1214,6 +1396,21 @@ private fun CustomAiSettingsCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+
+            // Explicit data-egress scope disclosure
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = colorScheme.surfaceContainerLow,
+                border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f)),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "隐私与外发范围声明：仅支持 https:// 安全连接。开启后在“一句话创建”触发解析时，仅将当前输入框文本、当前日期时间与默认学期总周数发送至「$targetHostLabel」，绝不会上传本地已有课表、日程或其它配置。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
             }
 
             // Uniform horizontal preset buttons row
@@ -1256,8 +1453,19 @@ private fun CustomAiSettingsCard(
             OutlinedTextField(
                 value = baseUrl,
                 onValueChange = { baseUrl = it },
-                label = { Text("Base URL", maxLines = 1, softWrap = false) },
+                label = { Text("Base URL (仅限 https://)", maxLines = 1, softWrap = false) },
                 placeholder = { Text("https://api.deepseek.com/v1", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                isError = !isUrlValidHttps,
+                supportingText = if (!isUrlValidHttps) {
+                    {
+                        Text(
+                            text = "为保护 API Key 与隐私数据，仅允许使用 https:// 协议接口地址",
+                            color = colorScheme.error,
+                        )
+                    }
+                } else {
+                    null
+                },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1272,7 +1480,7 @@ private fun CustomAiSettingsCard(
                 placeholder = { Text("sk-...", maxLines = 1) },
                 supportingText = {
                     Text(
-                        text = "本地 Keystore 加密保存",
+                        text = "由 Android Keystore AES-256 硬件级加密保存，不包含在导出备份中",
                         style = MaterialTheme.typography.labelSmall,
                         color = colorScheme.onSurfaceVariant,
                     )
@@ -1328,6 +1536,7 @@ private fun CustomAiSettingsCard(
             ) {
                 Button(
                     onClick = { onSave(enabled, baseUrl, apiKey, model) },
+                    enabled = isUrlValidHttps,
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)
@@ -1345,7 +1554,10 @@ private fun CustomAiSettingsCard(
 
                 FilledTonalButton(
                     onClick = { onTestConnection(baseUrl, apiKey, model) },
-                    enabled = !isTesting && baseUrl.isNotBlank() && apiKey.isNotBlank() && model.isNotBlank(),
+                    enabled = !isTesting &&
+                        OpenAiCompatibleClient.isValidHttpsUrl(baseUrl) &&
+                        apiKey.isNotBlank() &&
+                        model.isNotBlank(),
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)

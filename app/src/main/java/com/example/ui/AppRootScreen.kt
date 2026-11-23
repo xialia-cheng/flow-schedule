@@ -326,6 +326,7 @@ fun AppRootScreen(
             value = smartState.inputText,
             isParsing = smartState.isParsing,
             isCustomAiReady = smartState.customAiConfig.isReady,
+            customAiDomain = smartState.customAiConfig.targetHost,
             onValueChange = { smartCaptureViewModel.updateInput(it) },
             onSubmit = { smartCaptureViewModel.submitQuickInput(showMessage) },
             onDismiss = { smartCaptureViewModel.dismissInputSheet() },

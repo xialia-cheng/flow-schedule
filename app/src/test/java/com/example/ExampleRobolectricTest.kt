@@ -16,10 +16,11 @@ import com.example.smart.ConflictDetector
 import com.example.smart.DraftType
 import com.example.smart.LocalKeystoreCipher
 import com.example.smart.OpenAiCompatibleClient
+import com.example.smart.SecureStorageException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -339,12 +340,21 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `local keystore cipher encrypts and decrypts api keys cleanly`() {
+    fun `local keystore cipher refuses silent plaintext fallback and flags legacy obf keys for reentry`() {
         val secret = "sk-test-deepseek-1234567890"
-        val encrypted = LocalKeystoreCipher.encrypt(secret)
-        assertNotEquals(secret, encrypted)
-        assertEquals(secret, LocalKeystoreCipher.decrypt(encrypted))
-        assertEquals("", LocalKeystoreCipher.decrypt(""))
+        // In Robolectric JVM without AndroidKeyStore provider, encrypt must fail closed with SecureStorageException
+        val thrown = runCatching { LocalKeystoreCipher.encrypt(secret) }.exceptionOrNull()
+        assertTrue(thrown is SecureStorageException)
+        assertEquals("", LocalKeystoreCipher.encrypt(""))
+
+        // Legacy OBF_V1 entries must NOT return obfuscated payload; instead flag requiresLegacyMigration
+        val legacyResult = LocalKeystoreCipher.decryptWithStatus("OBF_V1:c2stdGVzdA==")
+        assertEquals("", legacyResult.plainText)
+        assertTrue(legacyResult.requiresLegacyMigration)
+
+        val emptyResult = LocalKeystoreCipher.decryptWithStatus("")
+        assertEquals("", emptyResult.plainText)
+        assertFalse(emptyResult.requiresLegacyMigration)
     }
 
     @Test
@@ -1008,5 +1018,114 @@ class ExampleRobolectricTest {
         assertEquals(end - activeNow, focusNotif.timeoutAfter)
         assertTrue(focusItem.expandedContentText(activeNow).contains("沉浸专注"))
         assertTrue(focusItem.copy(isBreakPhase = true).expandedContentText(activeNow).contains("专注休息"))
+    }
+
+    @Test
+    fun `openai client enforces strict https urls and extracts host safely`() {
+        assertTrue(OpenAiCompatibleClient.isValidHttpsUrl("https://api.deepseek.com/v1"))
+        assertTrue(OpenAiCompatibleClient.isValidHttpsUrl("  https://dashscope.aliyuncs.com/compatible-mode/v1  "))
+        assertFalse(OpenAiCompatibleClient.isValidHttpsUrl("http://api.deepseek.com/v1"))
+        assertFalse(OpenAiCompatibleClient.isValidHttpsUrl("ftp://example.com"))
+        assertFalse(OpenAiCompatibleClient.isValidHttpsUrl(""))
+        assertFalse(OpenAiCompatibleClient.isValidHttpsUrl("api.deepseek.com/v1"))
+
+        assertEquals("api.deepseek.com", OpenAiCompatibleClient.extractHostOrNull("https://api.deepseek.com/v1"))
+        assertNull(OpenAiCompatibleClient.extractHostOrNull("http://api.deepseek.com/v1"))
+        assertNull(OpenAiCompatibleClient.extractHostOrNull("not-a-url"))
+    }
+
+    @Test
+    fun `course gridDisplayLocation strips at sign and campus prefix while keeping compactDisplayLocation`() {
+        val campusCourse = CourseEntity(
+            timetableId = 1L,
+            name = "毛泽东思想和中国特色社会主义理论体系概论",
+            location = "越溪校区 流-515实",
+            dayOfWeek = 1,
+            startSection = 1,
+            endSection = 2,
+        )
+        assertEquals("流-515实", campusCourse.gridDisplayLocation())
+        assertEquals("@流-515实", campusCourse.compactDisplayLocation())
+
+        val normalCourse = campusCourse.copy(location = "@信1-211多")
+        assertEquals("信1-211多", normalCourse.gridDisplayLocation())
+
+        val blankCourse = campusCourse.copy(location = "  ")
+        assertEquals("", blankCourse.gridDisplayLocation())
+    }
+
+    @Test
+    fun `live update hides sensitive lockscreen details by default and respects opt in toggle`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val manager = com.example.notification.LiveUpdateManager(context)
+        manager.ensureNotificationChannel()
+
+        val start = 1_795_300_000_000L
+        val end = start + 90 * 60_000L
+        val now = start + 15 * 60_000L
+
+        val privateItem = LiveActivityItem(
+            sourceType = LiveActivitySourceType.COURSE,
+            sourceId = 301L,
+            dateKey = "2026-11-22",
+            title = "软件体系结构",
+            location = "流-515实",
+            teacher = "张教授",
+            notes = "机密项目演示",
+            sectionLabel = "第3-4节",
+            startTimeMillis = start,
+            endTimeMillis = end,
+            reminderMinutesBefore = 15,
+            showLockscreenDetails = false,
+        )
+        val privateNotif = manager.buildLiveActivityNotification(privateItem, now, silentUpdate = false)
+        assertEquals(android.app.Notification.VISIBILITY_PRIVATE, privateNotif.visibility)
+        assertNotNull(privateNotif.publicVersion)
+        val publicText = privateNotif.publicVersion!!.extras
+            .getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString().orEmpty()
+        assertFalse(publicText.contains("流-515实"))
+        assertFalse(publicText.contains("张教授"))
+        assertFalse(publicText.contains("机密项目演示"))
+
+        val publicItem = privateItem.copy(showLockscreenDetails = true)
+        val publicNotif = manager.buildLiveActivityNotification(publicItem, now, silentUpdate = false)
+        assertEquals(android.app.Notification.VISIBILITY_PUBLIC, publicNotif.visibility)
+        assertNull(publicNotif.publicVersion)
+    }
+
+    @Test
+    fun `full backup rejects unrecognized json and preserves completed schedules cleanly`() {
+        assertNull(TimetableImportExport.parseFullBackupJson("{}"))
+        assertNull(TimetableImportExport.parseFullBackupJson("""{"hello":"world"}"""))
+        assertNull(TimetableImportExport.parseFullBackupJson("not valid json"))
+
+        val completedSchedule = ScheduleEntity(
+            id = 88L,
+            title = "已完成实验报告",
+            notes = "提交 PDF",
+            startTimeMillis = 1_795_000_000_000L,
+            endTimeMillis = 1_795_003_600_000L,
+            isCompleted = true,
+        )
+        val payload = com.example.data.FullBackupPayload(
+            timetables = listOf(
+                TimetableEntity(
+                    id = 1L,
+                    name = "测试学期",
+                    semesterStartMondayMillis = 1_700_000_000_000L,
+                    totalWeeks = 20,
+                    isActive = true,
+                ),
+            ),
+            courses = emptyList(),
+            sectionTimes = CourseColorPalette.defaultSectionTimes(1L),
+            schedules = listOf(completedSchedule),
+        )
+        val json = TimetableImportExport.exportFullBackupJson(payload)
+        val restored = TimetableImportExport.parseFullBackupJson(json)
+        assertNotNull(restored)
+        assertEquals(1, restored!!.schedules.size)
+        assertTrue(restored.schedules.first().isCompleted)
+        assertEquals("已完成实验报告", restored.schedules.first().title)
     }
 }

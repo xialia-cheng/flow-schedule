@@ -41,6 +41,7 @@ class AppContainer(application: Application) {
         scheduleDao = database.scheduleDao(),
         alarmScheduler = alarmScheduler,
         liveUpdateCoordinator = liveUpdateCoordinator,
+        database = database,
     )
 
     val smartCaptureOrchestrator: SmartCaptureOrchestrator = SmartCaptureOrchestrator(

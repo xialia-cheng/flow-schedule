@@ -200,6 +200,7 @@ fun SmartQuickCaptureSheet(
     value: String,
     isParsing: Boolean,
     isCustomAiReady: Boolean,
+    customAiDomain: String? = null,
     onValueChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onDismiss: () -> Unit,
@@ -253,7 +254,7 @@ fun SmartQuickCaptureSheet(
                     color = if (isCustomAiReady) colorScheme.primaryContainer else colorScheme.secondaryContainer,
                 ) {
                     Text(
-                        text = if (isCustomAiReady) "自定义 AI" else "本地离线",
+                        text = if (isCustomAiReady) "自定义 AI 在线解析" else "纯本地离线解析",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = if (isCustomAiReady) colorScheme.onPrimaryContainer else colorScheme.onSecondaryContainer,
@@ -265,7 +266,11 @@ fun SmartQuickCaptureSheet(
             }
 
             Text(
-                text = "支持日期星期、早八/精确时段、@地点、提前提醒与免打扰关键词；支持分号分隔多条内容。",
+                text = if (isCustomAiReady) {
+                    "当前使用自定义 AI 在线解析（${customAiDomain ?: "已配置 HTTPS 接口"}），仅发送本条输入文本、当前时间与学期周数；断网时自动回退本地解析。"
+                } else {
+                    "纯本地离线解析：所有文字均仅在设备本地识别日期、节次、@地点、提醒与免打扰，不联网。"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = colorScheme.onSurfaceVariant,
             )

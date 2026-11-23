@@ -6,9 +6,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-val DisplayFontFamily: FontFamily = FontFamily.Default
+val DisplayFontFamily = FontFamily.Default
 
-val MonoFontFamily: FontFamily = FontFamily.Default
+val MonoFontFamily = FontFamily.Default
 
 val AppTypography = Typography(
     displaySmall = TextStyle(

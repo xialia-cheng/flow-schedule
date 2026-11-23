@@ -15,6 +15,12 @@ interface ScheduleDao {
     @Query("SELECT * FROM schedules WHERE isCompleted = 0 ORDER BY startTimeMillis ASC")
     suspend fun getAllIncompleteSchedules(): List<ScheduleEntity>
 
+    @Query("SELECT * FROM schedules ORDER BY isCompleted ASC, startTimeMillis ASC")
+    suspend fun getAllSchedules(): List<ScheduleEntity>
+
+    @Query("DELETE FROM schedules")
+    suspend fun deleteAllSchedules()
+
     @Query("SELECT * FROM schedules WHERE id = :id LIMIT 1")
     suspend fun getScheduleById(id: Long): ScheduleEntity?
 

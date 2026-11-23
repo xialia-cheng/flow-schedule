@@ -31,6 +31,8 @@ import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.TableChart
+import androidx.compose.material.icons.rounded.WarningAmber
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,6 +47,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,6 +62,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.data.BackupRestoreMode
+import com.example.data.FullBackupPayload
 import com.example.data.TimetableImportExport
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
@@ -81,7 +86,7 @@ fun TimetableImportSheet(
     onImportHtml: (htmlText: String, replaceExisting: Boolean) -> Unit,
     onImportShareCode: (code: String, createNewTimetable: Boolean) -> Unit,
     onGenerateBackupJson: suspend () -> String,
-    onRestoreBackupJson: (jsonText: String) -> Unit,
+    onRestoreBackupJson: (jsonText: String, mode: BackupRestoreMode) -> Unit,
     onNotify: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -95,6 +100,7 @@ fun TimetableImportSheet(
     var textInput by remember { mutableStateOf("") }
     var replaceExisting by remember { mutableStateOf(false) }
     var createNewForCode by remember { mutableStateOf(true) }
+    var pendingBackupPreview by remember { mutableStateOf<Pair<String, FullBackupPayload>?>(null) }
 
     // Zero-permission Storage Access Framework file pickers
     val openFileLauncher = rememberLauncherForActivityResult(
@@ -109,8 +115,12 @@ fun TimetableImportSheet(
             if (!content.isNullOrBlank()) {
                 when (selectedMode) {
                     ImportMode.JSON_BACKUP -> {
-                        onRestoreBackupJson(content)
-                        onDismiss()
+                        val parsed = TimetableImportExport.parseFullBackupJson(content)
+                        if (parsed == null) {
+                            onNotify("JSON 备份格式无效，原有数据未作任何改动")
+                        } else {
+                            pendingBackupPreview = content to parsed
+                        }
                     }
                     else -> textInput = content
                 }
@@ -402,10 +412,34 @@ fun TimetableImportSheet(
                                 color = colorScheme.onSurface,
                             )
                             Text(
-                                text = "备份包含全部多课表、课程、1-12 节次时间及日程待办，换机或重装前可导出到本地文件随时恢复。",
+                                text = "导出范围：全部多课表、课程、1–16 节次作息及全部日程（含已完成），不含 AI API Key 密钥。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colorScheme.onSurfaceVariant,
                             )
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = colorScheme.tertiaryContainer.copy(alpha = 0.55f),
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.Top,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.WarningAmber,
+                                        contentDescription = null,
+                                        tint = colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Text(
+                                        text = "明文风险提示：JSON 备份以明文存储（含上课教室、教师与日程备注），请妥善保管并避免上传至公开网络。",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onTertiaryContainer,
+                                    )
+                                }
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -446,6 +480,53 @@ fun TimetableImportSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
         }
+    }
+
+    pendingBackupPreview?.let { (rawJson, payload) ->
+        AlertDialog(
+            onDismissRequest = { pendingBackupPreview = null },
+            title = { Text("选择备份恢复方式") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "已解析到 ${payload.timetables.size} 个课表、${payload.courses.size} 门课程、${payload.schedules.size} 条日程。",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = "• 智能合并（推荐）：按名称与时间自动去重，重复导入同一文件不会产生冗余数据。\n• 覆盖恢复：清空当前所有本地课表与日程后完全还原。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            onRestoreBackupJson(rawJson, BackupRestoreMode.OVERWRITE_ALL)
+                            pendingBackupPreview = null
+                            onDismiss()
+                        },
+                    ) {
+                        Text("覆盖恢复", color = MaterialTheme.colorScheme.error)
+                    }
+                    Button(
+                        onClick = {
+                            onRestoreBackupJson(rawJson, BackupRestoreMode.SMART_MERGE)
+                            pendingBackupPreview = null
+                            onDismiss()
+                        },
+                    ) {
+                        Text("智能合并")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingBackupPreview = null }) {
+                    Text("取消")
+                }
+            },
+        )
     }
 }
 

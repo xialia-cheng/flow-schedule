@@ -1,5 +1,6 @@
 package com.example.data
 
+import androidx.room.withTransaction
 import com.example.notification.LiveUpdateCoordinator
 import com.example.notification.ScheduleAlarmScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -7,12 +8,24 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 
+enum class BackupRestoreMode(val label: String) {
+    SMART_MERGE("智能合并（自动去重）"),
+    OVERWRITE_ALL("清空并覆盖恢复"),
+}
+
+data class BackupRestoreResult(
+    val coursesImported: Int,
+    val schedulesImported: Int,
+    val skippedDuplicates: Int = 0,
+)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class TimetableRepository(
     private val timetableDao: TimetableDao,
     private val scheduleDao: ScheduleDao,
     private val alarmScheduler: ScheduleAlarmScheduler,
     private val liveUpdateCoordinator: LiveUpdateCoordinator,
+    private val database: ScheduleDatabase? = null,
 ) {
     val allTimetables: Flow<List<TimetableEntity>> = timetableDao.observeAllTimetables()
     val activeTimetable: Flow<TimetableEntity?> = timetableDao.observeActiveTimetable()
@@ -190,7 +203,7 @@ class TimetableRepository(
         val timetables = timetableDao.getAllTimetables()
         val courses = timetableDao.getAllCourses()
         val times = timetables.flatMap { timetableDao.getSectionTimes(it.id) }
-        val schedules = scheduleDao.getAllIncompleteSchedules()
+        val schedules = scheduleDao.getAllSchedules()
         return TimetableImportExport.exportFullBackupJson(
             FullBackupPayload(
                 timetables = timetables,
@@ -201,10 +214,51 @@ class TimetableRepository(
         )
     }
 
-    suspend fun restoreFullBackupJson(jsonText: String): Pair<Int, Int>? {
-        val payload = TimetableImportExport.parseFullBackupJson(jsonText) ?: return null
-        val idMapping = mutableMapOf<Long, Long>()
+    suspend fun restoreFullBackupJson(
+        jsonText: String,
+        mode: BackupRestoreMode = BackupRestoreMode.SMART_MERGE,
+    ): Pair<Int, Int>? {
+        val res = restoreFullBackupWithMode(jsonText, mode) ?: return null
+        return res.coursesImported to res.schedulesImported
+    }
 
+    suspend fun restoreFullBackupWithMode(
+        jsonText: String,
+        mode: BackupRestoreMode = BackupRestoreMode.SMART_MERGE,
+    ): BackupRestoreResult? {
+        val payload = TimetableImportExport.parseFullBackupJson(jsonText) ?: return null
+        if (mode == BackupRestoreMode.OVERWRITE_ALL &&
+            payload.timetables.isEmpty() &&
+            payload.courses.isEmpty() &&
+            payload.schedules.isEmpty()
+        ) {
+            return null
+        }
+
+        val executeBlock: suspend () -> BackupRestoreResult = {
+            when (mode) {
+                BackupRestoreMode.OVERWRITE_ALL -> applyOverwriteRestore(payload)
+                BackupRestoreMode.SMART_MERGE -> applySmartMergeRestore(payload)
+            }
+        }
+
+        val result = if (database != null) {
+            database.withTransaction { executeBlock() }
+        } else {
+            executeBlock()
+        }
+
+        liveUpdateCoordinator.syncAll(rescheduleAlarms = true)
+        return result
+    }
+
+    private suspend fun applyOverwriteRestore(payload: FullBackupPayload): BackupRestoreResult {
+        timetableDao.getAllCourses().forEach { alarmScheduler.cancelAlarmsForCourse(it.id) }
+        scheduleDao.getAllSchedules().forEach { alarmScheduler.cancelAlarmsForSchedule(it.id) }
+        scheduleDao.deleteAllSchedules()
+        timetableDao.deleteAllTimetables()
+
+        val idMapping = mutableMapOf<Long, Long>()
         if (payload.timetables.isNotEmpty()) {
             payload.timetables.forEach { tt ->
                 val newId = timetableDao.insertTimetable(tt.copy(id = 0L, isActive = false))
@@ -223,19 +277,133 @@ class TimetableRepository(
         }
 
         val fallbackId = ensureDefaultTimetableExists().id
-        val remappedCourses = payload.courses.map { c ->
-            c.copy(id = 0L, timetableId = idMapping[c.timetableId] ?: fallbackId)
-        }
-        if (remappedCourses.isNotEmpty()) {
-            timetableDao.insertCourses(remappedCourses)
+        val deduplicatedCourses = deduplicateCourses(
+            payload.courses.map { c ->
+                c.copy(id = 0L, timetableId = idMapping[c.timetableId] ?: fallbackId)
+            },
+        )
+        if (deduplicatedCourses.isNotEmpty()) {
+            timetableDao.insertCourses(deduplicatedCourses)
         }
 
-        payload.schedules.forEach { s ->
+        val deduplicatedSchedules = deduplicateSchedules(payload.schedules)
+        deduplicatedSchedules.forEach { s ->
             scheduleDao.insertSchedule(s.copy(id = 0L))
         }
 
-        liveUpdateCoordinator.syncAll(rescheduleAlarms = true)
-        return remappedCourses.size to payload.schedules.size
+        val skipped = (payload.courses.size - deduplicatedCourses.size) +
+            (payload.schedules.size - deduplicatedSchedules.size)
+        return BackupRestoreResult(
+            coursesImported = deduplicatedCourses.size,
+            schedulesImported = deduplicatedSchedules.size,
+            skippedDuplicates = skipped.coerceAtLeast(0),
+        )
+    }
+
+    private suspend fun applySmartMergeRestore(payload: FullBackupPayload): BackupRestoreResult {
+        val existingTimetables = timetableDao.getAllTimetables().toMutableList()
+        val idMapping = mutableMapOf<Long, Long>()
+
+        if (payload.timetables.isNotEmpty()) {
+            payload.timetables.forEach { tt ->
+                val matchedExisting = existingTimetables.firstOrNull {
+                    it.name.trim().equals(tt.name.trim(), ignoreCase = true)
+                }
+                val targetId = if (matchedExisting != null) {
+                    matchedExisting.id
+                } else {
+                    val createdId = timetableDao.insertTimetable(tt.copy(id = 0L, isActive = false))
+                    existingTimetables.add(tt.copy(id = createdId, isActive = false))
+                    val matchingTimes = payload.sectionTimes.filter { it.timetableId == tt.id }
+                    timetableDao.upsertSectionTimes(
+                        if (matchingTimes.isNotEmpty()) {
+                            matchingTimes.map { it.copy(timetableId = createdId) }
+                        } else {
+                            CourseColorPalette.defaultSectionTimes(createdId)
+                        },
+                    )
+                    createdId
+                }
+                idMapping[tt.id] = targetId
+            }
+            if (existingTimetables.none { it.isActive }) {
+                val activeOld = payload.timetables.firstOrNull { it.isActive } ?: payload.timetables.first()
+                idMapping[activeOld.id]?.let { timetableDao.setActiveTimetable(it) }
+            }
+        }
+
+        val fallbackId = ensureDefaultTimetableExists().id
+        val existingCourseKeys = timetableDao.getAllCourses()
+            .map { courseDedupKey(it) }
+            .toMutableSet()
+
+        val coursesToInsert = mutableListOf<CourseEntity>()
+        var skippedDuplicates = 0
+        payload.courses.forEach { raw ->
+            val remapped = raw.copy(
+                id = 0L,
+                timetableId = idMapping[raw.timetableId] ?: fallbackId,
+            )
+            val key = courseDedupKey(remapped)
+            if (existingCourseKeys.add(key)) {
+                coursesToInsert.add(remapped)
+            } else {
+                skippedDuplicates++
+            }
+        }
+        if (coursesToInsert.isNotEmpty()) {
+            timetableDao.insertCourses(coursesToInsert)
+        }
+
+        val existingScheduleKeys = scheduleDao.getAllSchedules()
+            .map { scheduleDedupKey(it) }
+            .toMutableSet()
+
+        var importedSchedules = 0
+        payload.schedules.forEach { s ->
+            val key = scheduleDedupKey(s)
+            if (existingScheduleKeys.add(key)) {
+                scheduleDao.insertSchedule(s.copy(id = 0L))
+                importedSchedules++
+            } else {
+                skippedDuplicates++
+            }
+        }
+
+        return BackupRestoreResult(
+            coursesImported = coursesToInsert.size,
+            schedulesImported = importedSchedules,
+            skippedDuplicates = skippedDuplicates,
+        )
+    }
+
+    private fun courseDedupKey(c: CourseEntity): String = listOf(
+        c.timetableId.toString(),
+        c.name.trim(),
+        c.dayOfWeek.toString(),
+        c.startSection.toString(),
+        c.endSection.toString(),
+        c.startWeek.toString(),
+        c.endWeek.toString(),
+        c.weekType.name,
+        c.customWeeksCsv.trim(),
+    ).joinToString("|")
+
+    private fun scheduleDedupKey(s: ScheduleEntity): String = listOf(
+        s.title.trim(),
+        s.startTimeMillis.toString(),
+        s.endTimeMillis.toString(),
+        s.repeatRule.name,
+    ).joinToString("|")
+
+    private fun deduplicateCourses(courses: List<CourseEntity>): List<CourseEntity> {
+        val seen = HashSet<String>()
+        return courses.filter { seen.add(courseDedupKey(it)) }
+    }
+
+    private fun deduplicateSchedules(schedules: List<ScheduleEntity>): List<ScheduleEntity> {
+        val seen = HashSet<String>()
+        return schedules.filter { seen.add(scheduleDedupKey(it)) }
     }
 
     // --- Study Tasks ---

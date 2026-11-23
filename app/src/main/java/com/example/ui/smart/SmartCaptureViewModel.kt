@@ -7,6 +7,7 @@ import com.example.data.CustomAiConfig
 import com.example.data.UserPreferencesRepository
 import com.example.smart.OpenAiCompatibleClient
 import com.example.smart.ParseSource
+import com.example.smart.SecureStorageException
 import com.example.smart.SmartCaptureOrchestrator
 import com.example.smart.SmartParsedDraft
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -187,21 +188,34 @@ class SmartCaptureViewModel(
         model: String,
         onResult: (String) -> Unit,
     ) {
+        val cleanUrl = baseUrl.trim()
+        val cleanKey = apiKey.trim()
+        val cleanModel = model.trim()
+        if (cleanUrl.isNotBlank() && !OpenAiCompatibleClient.isValidHttpsUrl(cleanUrl)) {
+            onResult("保存失败：Base URL 必须使用 https:// 安全连接（已禁止 http:// 明文）")
+            return
+        }
         viewModelScope.launch {
-            preferencesRepository.saveCustomAiConfig(
-                enabled = enabled,
-                baseUrl = baseUrl,
-                apiKey = apiKey,
-                model = model,
-            )
-            _aiTestFeedback.value = null
-            onResult(
-                if (enabled && baseUrl.isNotBlank() && apiKey.isNotBlank() && model.isNotBlank()) {
-                    "自定义 AI 接口已加密保存至本地"
-                } else {
-                    "AI 配置已更新（当前使用本地离线解析）"
-                },
-            )
+            try {
+                preferencesRepository.saveCustomAiConfig(
+                    enabled = enabled,
+                    baseUrl = cleanUrl,
+                    apiKey = cleanKey,
+                    model = cleanModel,
+                )
+                _aiTestFeedback.value = null
+                onResult(
+                    if (enabled && OpenAiCompatibleClient.isValidHttpsUrl(cleanUrl) && cleanKey.isNotBlank() && cleanModel.isNotBlank()) {
+                        "自定义 AI 接口已通过 Android Keystore 加密保存"
+                    } else {
+                        "AI 配置已更新（当前使用纯本地离线解析）"
+                    },
+                )
+            } catch (e: SecureStorageException) {
+                onResult("保存失败：${e.message ?: "设备安全密钥库不可用，拒绝明文保存密钥"}")
+            } catch (e: IllegalArgumentException) {
+                onResult("保存失败：${e.message ?: "配置格式无效"}")
+            }
         }
     }
 

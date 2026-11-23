@@ -30,6 +30,7 @@ data class LiveActivityItem(
     val showLocation: Boolean = true,
     val showTeacher: Boolean = true,
     val showNotes: Boolean = false,
+    val showLockscreenDetails: Boolean = false,
 ) {
     val reminderTriggerMillis: Long
         get() = startTimeMillis - reminderMinutesBefore * 60_000L

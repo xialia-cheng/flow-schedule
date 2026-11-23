@@ -237,7 +237,24 @@ fun PermissionOnboardingSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = colorScheme.surfaceContainerLow,
+                border = BorderStroke(1.dp, colorScheme.outlineVariant),
+            ) {
+                Text(
+                    text = "跨机型兼容说明：本应用基于 Android 16 原生 Live Updates 标准协议构建，已在 ColorOS 17 流体云真机完成调优；在其他支持 Android 16 实况通知的机型可自动适配，在 Android 15 及以下或未开放胶囊的系统中会自动降级为高优先级常驻进度倒计时通知。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
 
             Button(
                 onClick = onDismiss,

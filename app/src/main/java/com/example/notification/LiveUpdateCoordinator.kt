@@ -83,6 +83,7 @@ class LiveUpdateCoordinator(
                     showLocation = settings.fluidCloudShowLocation,
                     showTeacher = settings.fluidCloudShowTeacher,
                     showNotes = settings.fluidCloudShowNotes,
+                    showLockscreenDetails = settings.fluidCloudLockscreenDetails,
                 )
                 candidates.add(liveItem)
                 if (rescheduleAlarms && !s.isExpired(nowMillis)) {
@@ -156,6 +157,7 @@ class LiveUpdateCoordinator(
                             showLocation = settings.fluidCloudShowLocation,
                             showTeacher = settings.fluidCloudShowTeacher,
                             showNotes = settings.fluidCloudShowNotes,
+                            showLockscreenDetails = settings.fluidCloudLockscreenDetails,
                         )
                         if (liveItem.isLiveEligible(nowMillis)) {
                             candidates.add(liveItem)

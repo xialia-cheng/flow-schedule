@@ -36,6 +36,9 @@ interface TimetableDao {
     @Query("DELETE FROM timetables WHERE id = :timetableId")
     suspend fun deleteTimetableById(timetableId: Long)
 
+    @Query("DELETE FROM timetables")
+    suspend fun deleteAllTimetables()
+
     // --- Courses ---
     @Query("SELECT * FROM courses WHERE timetableId = :timetableId ORDER BY dayOfWeek ASC, startSection ASC")
     fun observeCoursesForTimetable(timetableId: Long): Flow<List<CourseEntity>>

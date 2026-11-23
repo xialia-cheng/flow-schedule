@@ -5,15 +5,11 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="file" path="datastore/flow_schedule_prefs.preferences_pb" />
+        <exclude domain="sharedpref" path="flow_live_update_runtime.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="datastore/flow_schedule_prefs.preferences_pb" />
+        <exclude domain="sharedpref" path="flow_live_update_runtime.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>
