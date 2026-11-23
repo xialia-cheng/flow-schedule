@@ -1375,22 +1375,33 @@ private fun SectionTimeAxisColumn(
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
 
-    val activeSectionProgress: Map<Int, Float> = remember(sectionTimes, nowMillis, highlightCurrentSection) {
+    val sectionElapsedMap: Map<Int, Float> = remember(sectionTimes, nowMillis, highlightCurrentSection) {
         if (!highlightCurrentSection) {
             emptyMap()
         } else {
+            val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
+            val nowSec = cal.get(Calendar.HOUR_OF_DAY) * 3600 +
+                cal.get(Calendar.MINUTE) * 60 +
+                cal.get(Calendar.SECOND)
             buildMap {
                 sectionTimes.forEach { slot ->
-                    computeSectionElapsedFraction(slot, nowMillis)?.let { fraction ->
-                        put(slot.sectionNumber, fraction)
+                    val startSec = slot.startHour * 3600 + slot.startMinute * 60
+                    val endSec = slot.endHour * 3600 + slot.endMinute * 60
+                    val fraction = when {
+                        endSec <= startSec -> 0f
+                        nowSec >= endSec -> 1f
+                        nowSec <= startSec -> 0f
+                        else -> ((nowSec - startSec).toFloat() / (endSec - startSec).toFloat()).coerceIn(0f, 1f)
                     }
+                    put(slot.sectionNumber, fraction)
                 }
             }
         }
     }
 
     // Subtle breathing animation — only runs when a section is currently in progress
-    val breathingPulse = if (activeSectionProgress.isNotEmpty()) {
+    val hasOngoingSection = sectionElapsedMap.values.any { it > 0f && it < 1f }
+    val breathingPulse = if (hasOngoingSection) {
         val infiniteTransition = rememberInfiniteTransition(label = "active_section_breath")
         infiniteTransition.animateFloat(
             initialValue = 0f,
@@ -1422,86 +1433,68 @@ private fun SectionTimeAxisColumn(
         ) {
             for (section in 1..sectionCount) {
                 val slot = sectionTimes.find { it.sectionNumber == section }
-                val rawProgress = activeSectionProgress[section]
-                val isCurrentSection = rawProgress != null
+                val rawElapsed = sectionElapsedMap[section] ?: 0f
+                val isCurrentSection = rawElapsed > 0f && rawElapsed < 1f
+                val isFullyPassed = rawElapsed >= 1f
                 val animatedProgress by animateFloatAsState(
-                    targetValue = rawProgress ?: 0f,
+                    targetValue = rawElapsed,
                     animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
                     label = "section_progress_$section",
                 )
 
-                val numberColor = if (isCurrentSection) {
-                    colorScheme.tertiary
+                // Clean cohesive blue-slate palette: passed time shaded deeper, upcoming time stays bright & light
+                val upcomingBg = if (flowColors.isDark) colorScheme.surfaceContainerLow else colorScheme.surface
+                val passedBg = if (flowColors.isDark) {
+                    colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                } else {
+                    colorScheme.primaryContainer.copy(alpha = 0.48f)
+                }
+
+                val numberColor = when {
+                    isCurrentSection -> colorScheme.primary
+                    isFullyPassed -> colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                    else -> colorScheme.onSurface
+                }
+                val startTimeColor = if (isFullyPassed) {
+                    colorScheme.onSurfaceVariant.copy(alpha = 0.68f)
                 } else {
                     colorScheme.onSurface
                 }
-                val startTimeColor = colorScheme.onSurface
-                val endTimeColor = colorScheme.onSurface.copy(alpha = 0.88f)
+                val endTimeColor = if (isFullyPassed) {
+                    colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
+                } else {
+                    colorScheme.onSurface.copy(alpha = 0.85f)
+                }
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(sectionHeight)
-                        .background(railBgColor)
+                        .background(upcomingBg)
                         .testTag("timetable_section_axis_$section"),
                 ) {
-                    if (isCurrentSection) {
-                        val baseHighlight = colorScheme.tertiaryContainer.copy(
-                            alpha = if (flowColors.isDark) 0.14f else 0.16f,
-                        )
-                        val fillTop = colorScheme.tertiary.copy(
-                            alpha = (if (flowColors.isDark) 0.34f else 0.30f) + breathingPulse * 0.05f,
-                        )
-                        val fillBottom = colorScheme.tertiary.copy(
-                            alpha = (if (flowColors.isDark) 0.48f else 0.44f) + breathingPulse * 0.07f,
-                        )
-                        val frontLineColor = colorScheme.tertiary.copy(
-                            alpha = 0.92f,
-                        )
-                        val railTrackColor = colorScheme.tertiary.copy(alpha = 0.14f)
-                        val railFillColor = colorScheme.tertiary
-
-                        // Layered breathing highlight backdrop + vertical elapsed-time progress fill + left rail bar
+                    if (animatedProgress > 0f) {
+                        val barColor = colorScheme.primary.copy(alpha = if (isCurrentSection) 0.90f else 0.35f)
                         Canvas(modifier = Modifier.fillMaxSize()) {
-                            drawRect(color = baseHighlight)
-
                             val progressY = (size.height * animatedProgress.coerceIn(0f, 1f))
-                                .coerceIn(2.dp.toPx(), size.height)
-
-                            // Top-to-bottom elapsed ratio fill
                             drawRect(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(fillTop, fillBottom),
-                                    startY = 0f,
-                                    endY = progressY,
-                                ),
+                                color = passedBg,
                                 topLeft = Offset.Zero,
                                 size = Size(size.width, progressY),
                             )
-
-                            // Crisp breathing progress-front line marking exact current time ratio
-                            drawLine(
-                                color = frontLineColor,
-                                start = Offset(3.dp.toPx(), progressY),
-                                end = Offset(size.width, progressY),
-                                strokeWidth = 1.5.dp.toPx(),
-                            )
-
-                            // Left vertical indicator track + elapsed progress fill
-                            val barWidth = 3.dp.toPx()
-                            val corner = CornerRadius(barWidth, barWidth)
-                            drawRoundRect(
-                                color = railTrackColor,
+                            // Subtle 2.5dp left edge rail showing daily time progression cleanly without slicing text
+                            drawRect(
+                                color = barColor,
                                 topLeft = Offset.Zero,
-                                size = Size(barWidth, size.height),
-                                cornerRadius = corner,
+                                size = Size(2.5.dp.toPx(), progressY),
                             )
-                            drawRoundRect(
-                                color = railFillColor,
-                                topLeft = Offset.Zero,
-                                size = Size(barWidth, progressY),
-                                cornerRadius = corner,
-                            )
+                            if (isCurrentSection) {
+                                drawCircle(
+                                    color = colorScheme.primary,
+                                    radius = 3.dp.toPx(),
+                                    center = Offset(2.5.dp.toPx(), progressY),
+                                )
+                            }
                         }
                     }
 
@@ -1587,36 +1580,44 @@ private fun SectionTimeAxisColumn(
                     } else {
                         ""
                     }
-                    val lunchProgress = if (highlightCurrentSection && beforeSlot != null && afterSlot != null) {
+                    val lunchElapsed = if (highlightCurrentSection && beforeSlot != null && afterSlot != null) {
                         val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
                         val nowSec = cal.get(Calendar.HOUR_OF_DAY) * 3600 + cal.get(Calendar.MINUTE) * 60 + cal.get(Calendar.SECOND)
                         val startSec = beforeSlot.endHour * 3600 + beforeSlot.endMinute * 60
                         val endSec = afterSlot.startHour * 3600 + afterSlot.startMinute * 60
-                        if (endSec > startSec && nowSec in startSec until endSec) {
-                            ((nowSec - startSec).toFloat() / (endSec - startSec).toFloat()).coerceIn(0f, 1f)
-                        } else null
-                    } else null
+                        when {
+                            endSec <= startSec -> 0f
+                            nowSec >= endSec -> 1f
+                            nowSec <= startSec -> 0f
+                            else -> ((nowSec - startSec).toFloat() / (endSec - startSec).toFloat()).coerceIn(0f, 1f)
+                        }
+                    } else 0f
+                    val lunchPassedBg = if (flowColors.isDark) {
+                        colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                    } else {
+                        colorScheme.primaryContainer.copy(alpha = 0.48f)
+                    }
+                    val lunchUpcomingBg = if (flowColors.isDark) colorScheme.surfaceContainerLow else colorScheme.surface
 
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(lunchBreakHeight)
-                            .background(
-                                if (lunchProgress != null) {
-                                    colorScheme.tertiaryContainer.copy(alpha = 0.25f)
-                                } else {
-                                    colorScheme.surfaceContainerHighest.copy(alpha = 0.55f)
-                                },
-                            ),
+                            .background(lunchUpcomingBg),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (lunchProgress != null) {
+                        if (lunchElapsed > 0f) {
                             Canvas(modifier = Modifier.fillMaxSize()) {
-                                val py = (size.height * lunchProgress).coerceIn(2.dp.toPx(), size.height)
+                                val py = size.height * lunchElapsed
                                 drawRect(
-                                    color = colorScheme.tertiary.copy(alpha = 0.36f),
+                                    color = lunchPassedBg,
                                     topLeft = Offset.Zero,
                                     size = Size(size.width, py),
+                                )
+                                drawRect(
+                                    color = colorScheme.primary.copy(alpha = if (lunchElapsed < 1f) 0.90f else 0.35f),
+                                    topLeft = Offset.Zero,
+                                    size = Size(2.5.dp.toPx(), py),
                                 )
                             }
                         }
@@ -1629,7 +1630,7 @@ private fun SectionTimeAxisColumn(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp,
                                 lineHeight = 11.sp,
-                                color = if (lunchProgress != null) colorScheme.tertiary else colorScheme.onSurfaceVariant,
+                                color = if (lunchElapsed > 0f && lunchElapsed < 1f) colorScheme.primary else colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                             )
                             if (lunchRangeText.isNotEmpty() && !compactMode) {
