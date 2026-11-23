@@ -1931,55 +1931,60 @@ private fun CourseGridCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 2.dp, vertical = 3.dp),
-            contentAlignment = Alignment.TopStart,
+                .padding(horizontal = 1.5.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .align(Alignment.TopStart),
-                verticalArrangement = Arrangement.Top,
-                horizontalAlignment = Alignment.Start,
+                    .padding(bottom = if (!isCurrentWeek) 14.dp else 0.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-
                 Text(
                     text = course.name,
                     style = MaterialTheme.typography.labelMedium.copy(
                         platformStyle = PlatformTextStyle(includeFontPadding = false),
                     ),
                     fontWeight = FontWeight.Bold,
-                    fontSize = (10.2f * scale).sp,
-                    lineHeight = (11.8f * scale).sp,
+                    fontSize = (9.8f * scale).sp,
+                    lineHeight = (11.5f * scale).sp,
+                    letterSpacing = (-0.35).sp,
+                    textAlign = TextAlign.Center,
                     color = textColor,
                     maxLines = Int.MAX_VALUE,
                     overflow = TextOverflow.Clip,
                 )
                 val compactLoc = course.compactDisplayLocation().removePrefix("@")
                 if (compactLoc.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(1.5.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = compactLoc,
                         style = MaterialTheme.typography.bodySmall.copy(
                             platformStyle = PlatformTextStyle(includeFontPadding = false),
                         ),
-                        fontSize = (9.2f * scale).sp,
-                        lineHeight = (10.8f * scale).sp,
+                        fontSize = (8.8f * scale).sp,
+                        lineHeight = (10.5f * scale).sp,
+                        letterSpacing = (-0.25).sp,
                         fontWeight = FontWeight.Medium,
-                        color = textColor.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Center,
+                        color = textColor.copy(alpha = 0.78f),
                         maxLines = Int.MAX_VALUE,
                         overflow = TextOverflow.Clip,
                     )
                 }
                 if (!compactMode && course.teacher.isNotBlank() && spanSections >= 3) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = course.teacher,
                         style = MaterialTheme.typography.bodySmall.copy(
                             platformStyle = PlatformTextStyle(includeFontPadding = false),
                         ),
-                        fontSize = (9f * scale).sp,
-                        lineHeight = (10.5f * scale).sp,
-                        color = textColor.copy(alpha = 0.72f),
+                        fontSize = (8.5f * scale).sp,
+                        lineHeight = (10f * scale).sp,
+                        letterSpacing = (-0.2).sp,
+                        textAlign = TextAlign.Center,
+                        color = textColor.copy(alpha = 0.65f),
                         maxLines = Int.MAX_VALUE,
                         overflow = TextOverflow.Clip,
                     )
