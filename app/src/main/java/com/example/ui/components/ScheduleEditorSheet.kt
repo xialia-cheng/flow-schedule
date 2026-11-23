@@ -481,7 +481,7 @@ fun ScheduleEditorSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "提前提醒（进入流体云实时胶囊窗口）",
+                    text = "提前提醒（进入状态栏实况胶囊或实时进度通知窗口）",
                     style = MaterialTheme.typography.labelMedium,
                     color = colorScheme.onSurfaceVariant,
                 )

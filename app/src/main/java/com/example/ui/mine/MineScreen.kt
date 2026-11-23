@@ -214,7 +214,7 @@ fun MineScreen(
 
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "ColorOS 17 流体云 · Live Updates",
+                        text = "实况通知 · Live Updates",
                         style = MaterialTheme.typography.titleSmall,
                         color = colorScheme.onSurfaceVariant,
                     )
@@ -224,7 +224,7 @@ fun MineScreen(
                         onOpenPermissions = onOpenPermissions,
                     )
 
-                    // Collapsible debug section containing "测试流体云效果"
+                    // Collapsible debug section containing "测试实况通知效果"
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.large,
@@ -254,13 +254,13 @@ fun MineScreen(
                                     )
                                     Column {
                                         Text(
-                                            text = "流体云调试与效果演练",
+                                            text = "实况通知调试与效果演练",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.SemiBold,
                                             color = colorScheme.onSurface,
                                         )
                                         Text(
-                                            text = if (debugExpanded) "点击收起调试面板" else "展开以手动触发 1 分钟流体云效果测试",
+                                            text = if (debugExpanded) "点击收起调试面板" else "展开以手动触发 1 分钟状态栏实况胶囊或实时进度通知测试",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = colorScheme.onSurfaceVariant,
                                         )
@@ -313,8 +313,8 @@ fun MineScreen(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             MineSwitchRow(
-                                title = "上课自动触发流体云提醒",
-                                subtitle = "课前提醒窗口与上课期间在状态栏胶囊实时显示课程倒计时",
+                                title = "上课自动触发实况通知",
+                                subtitle = "课前提醒窗口与上课期间在状态栏实况胶囊或进度通知中实时显示课程倒计时",
                                 checked = settings.courseReminderEnabled,
                                 onCheckedChange = { timetableViewModel.setCourseReminderEnabled(it) },
                                 testTag = "mine_switch_course_reminder",
@@ -476,14 +476,14 @@ fun MineScreen(
                             )
 
                             Text(
-                                text = "流体云卡片展示内容",
+                                text = "实况通知卡片展示内容",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = colorScheme.onSurface,
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             MineSwitchRow(
                                 title = "展示地点 / 教室",
-                                subtitle = "在流体云标题与展开卡片中显示 @教室 或地点",
+                                subtitle = "在实况通知标题与展开卡片中显示 @教室 或地点",
                                 checked = settings.fluidCloudShowLocation,
                                 onCheckedChange = { checked ->
                                     timetableViewModel.setFluidCloudDisplayOptions(
@@ -496,7 +496,7 @@ fun MineScreen(
                             )
                             MineSwitchRow(
                                 title = "展示授课教师",
-                                subtitle = "在课程流体云展开详情中附带授课教师姓名",
+                                subtitle = "在课程实况通知展开详情中附带授课教师姓名",
                                 checked = settings.fluidCloudShowTeacher,
                                 onCheckedChange = { checked ->
                                     timetableViewModel.setFluidCloudDisplayOptions(
@@ -509,7 +509,7 @@ fun MineScreen(
                             )
                             MineSwitchRow(
                                 title = "展示备注信息",
-                                subtitle = "在课程与日程流体云展开卡片中附带备注内容",
+                                subtitle = "在课程与日程实况通知展开卡片中附带备注内容",
                                 checked = settings.fluidCloudShowNotes,
                                 onCheckedChange = { checked ->
                                     timetableViewModel.setFluidCloudDisplayOptions(
@@ -1121,7 +1121,7 @@ private fun FluidCloudTestCard(
                     )
                     Text(
                         text = if (hasActiveTest) {
-                            "1 分钟测试正在胶囊倒计时中，点击可重新发起"
+                            "1 分钟测试正在状态栏实况胶囊或实时进度通知中倒计时，点击可重新发起"
                         } else {
                             "触发 1 分钟倒计时（含 @地点、分段进度条与切换免打扰 / 立即结束）"
                         },
@@ -1140,7 +1140,7 @@ private fun FluidCloudTestCard(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = "发起流体云测试",
+                    contentDescription = "发起实况通知测试",
                     tint = colorScheme.onPrimary,
                 )
             }
@@ -1187,7 +1187,7 @@ private fun FluidCloudPermissionCard(
                 )
                 Column {
                     Text(
-                        text = "流体云与闹钟权限诊断",
+                        text = "实况通知与闹钟权限诊断",
                         style = MaterialTheme.typography.titleSmall,
                         color = colorScheme.onSurface,
                     )

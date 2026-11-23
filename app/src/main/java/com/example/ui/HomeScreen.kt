@@ -261,8 +261,8 @@ fun HomeScreen(
 
                         item(key = "hero_section_title") {
                             SectionTitleRow(
-                                title = if (state.isHeroLiveActive) "当前进行中 · 流体云已激活" else "当前进行中 / 即将开始",
-                                trailingHint = if (state.isHeroLiveActive) "状态栏胶囊同步中" else null,
+                                title = if (state.isHeroLiveActive) "当前进行中 · 实况通知已激活" else "当前进行中 / 即将开始",
+                                trailingHint = if (state.isHeroLiveActive) "状态栏实况胶囊或进度通知同步中" else null,
                             )
                         }
 

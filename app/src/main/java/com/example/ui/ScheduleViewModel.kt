@@ -540,12 +540,12 @@ class ScheduleViewModel(
             repository.createTestFluidCloudSchedule(title = title, notes = notes)
             _selectedFilter.value = ScheduleFilter.TODAY
             if (!status.hasPostNotifications) {
-                emitSnackbar("临近课程流体云演示已创建，请先开启通知权限以查看顶部胶囊")
+                emitSnackbar("临近课程实况通知演示已创建，请先开启通知权限以查看状态栏实况胶囊或实时进度通知")
                 _showPermissionSheet.value = true
             } else if (status.isAndroid16OrAbove && !status.canPostPromotedNotifications) {
-                emitSnackbar("已推送临近课程通知，前往权限页开启「实时活动」即可晋升至流体云胶囊")
+                emitSnackbar("已推送临近课程通知，前往权限页开启「实时活动」即可晋升至状态栏实况胶囊")
             } else {
-                emitSnackbar("已触发临近课程流体云（15秒课前倒计时 → 自动切入上课），可切换应用查看顶部胶囊")
+                emitSnackbar("已触发临近课程实况通知（15秒课前倒计时 → 自动切入上课），可切换应用查看状态栏实况胶囊或实时进度通知")
             }
         }
     }

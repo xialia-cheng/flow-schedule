@@ -298,7 +298,7 @@ fun TimetableMoreSheet(
                     icon = Icons.Rounded.NotificationsActive,
                     title = "上课提醒",
                     subtitle = if (state.settings.courseReminderEnabled) {
-                        "提前 ${state.settings.courseReminderLeadMinutes} 分·流体云"
+                        "提前 ${state.settings.courseReminderLeadMinutes} 分·实况通知"
                     } else {
                         "已关闭"
                     },
@@ -1052,7 +1052,7 @@ private fun CourseReminderDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("通知、流体云与免打扰") },
+        title = { Text("通知、实况通知与免打扰") },
         text = {
             Column(
                 modifier = Modifier
@@ -1060,7 +1060,7 @@ private fun CourseReminderDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                SwitchSettingRow("开启课前流体云实时活动", enabled, onToggleEnabled)
+                SwitchSettingRow("上课自动触发实况通知", enabled, onToggleEnabled)
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1127,9 +1127,9 @@ private fun CourseReminderDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                // Fluid Cloud card metadata display toggles
+                // Live notification card metadata display toggles
                 Text(
-                    text = "流体云卡片展示内容",
+                    text = "实况通知卡片展示内容",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1153,7 +1153,7 @@ private fun CourseReminderDialog(
                 ) {
                     Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("测试流体云效果（1 分钟）")
+                    Text("测试实况通知效果（1 分钟）")
                 }
 
                 TextButton(

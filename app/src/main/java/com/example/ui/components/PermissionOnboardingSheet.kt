@@ -99,7 +99,7 @@ fun PermissionOnboardingSheet(
                         color = colorScheme.onSurface,
                     )
                     Text(
-                        text = "ColorOS 17 流体云 · Android 16+ Live Updates",
+                        text = "实况通知 · Android 16+ Live Updates",
                         style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.primary,
                     )
@@ -207,15 +207,15 @@ fun PermissionOnboardingSheet(
                             Text(
                                 text = when {
                                     !status.isChannelEligibleForLiveUpdates ->
-                                        "通知渠道重要性过低（静默最小化），系统将拒绝晋升至流体云胶囊，请在系统通知设置恢复高优先级"
+                                        "通知渠道重要性过低（静默最小化），系统将拒绝晋升至状态栏实况胶囊，请在系统通知设置恢复高优先级"
                                     status.isSystemPromotedOngoing ->
-                                        "FLAG_PROMOTED_ONGOING 已激活：当前课程/日程正以流体云胶囊跨应用运行"
+                                        "FLAG_PROMOTED_ONGOING 已激活：当前课程/日程正以状态栏实况胶囊或实时进度通知跨应用运行"
                                     status.lastNotificationPromotable == true ->
-                                        "ProgressStyle + EXTRA_REQUEST_PROMOTED_ONGOING 已通过 Android 16 晋升校验，临近课程将自动弹出胶囊"
+                                        "ProgressStyle + EXTRA_REQUEST_PROMOTED_ONGOING 已通过 Android 16 晋升校验，临近课程将自动弹出状态栏实况胶囊或实时进度通知"
                                     status.lastNotificationPromotable == false ->
-                                        "通知已发送，请在系统设置确认「实时活动 / 流体云」开关已开启"
+                                        "通知已发送，请在系统设置确认「实时活动 / 实况通知」开关已开启"
                                     else ->
-                                        "已接入 Android 16 Live Updates API 与跨应用定时唤醒，点击「测试流体云效果」立即体验课程胶囊"
+                                        "已接入 Android 16 Live Updates API 与跨应用定时唤醒，点击「测试实况通知效果」立即体验状态栏实况胶囊或实时进度通知"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colorScheme.onSurfaceVariant,
@@ -245,7 +245,7 @@ fun PermissionOnboardingSheet(
                 border = BorderStroke(1.dp, colorScheme.outlineVariant),
             ) {
                 Text(
-                    text = "跨机型兼容说明：本应用基于 Android 16 原生 Live Updates 标准协议构建，已在 ColorOS 17 流体云真机完成调优；在其他支持 Android 16 实况通知的机型可自动适配，在 Android 15 及以下或未开放胶囊的系统中会自动降级为高优先级常驻进度倒计时通知。",
+                    text = "跨机型兼容说明：本应用基于 Android 16+ 原生 Live Updates（实时更新）接口实现，支持已接入该标准的系统级胶囊；其余系统自动降级为标准常驻进度通知，核心提醒功能不受影响。",
                     style = MaterialTheme.typography.bodySmall,
                     color = colorScheme.onSurfaceVariant,
                     modifier = Modifier

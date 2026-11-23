@@ -124,7 +124,7 @@ fun HeroLiveCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "日程进入提前提醒窗口或开始时，将自动激活流体云胶囊",
+                        text = "日程进入提前提醒窗口或开始时，将自动激活状态栏实况胶囊或实时进度通知",
                         style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.onSurfaceVariant,
                     )
@@ -169,9 +169,9 @@ fun HeroLiveCard(
     )
 
     val statusPillText = when {
-        schedule.isTestSchedule && isInProgress -> "流体云实时测试 · 进行中"
-        isInProgress -> "流体云激活 · 进行中"
-        isInReminder -> "流体云激活 · 即将开始"
+        schedule.isTestSchedule && isInProgress -> "实况通知测试 · 进行中"
+        isInProgress -> "实况通知激活 · 进行中"
+        isInReminder -> "实况通知激活 · 即将开始"
         else -> "下一项待办"
     }
 

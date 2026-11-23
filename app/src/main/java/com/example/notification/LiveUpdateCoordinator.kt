@@ -208,7 +208,7 @@ class LiveUpdateCoordinator(
 
         val testSchedule = ScheduleEntity(
             title = courseTitle,
-            notes = "@$courseLocation · 临近课程流体云演练：前 15 秒展示课前倒计时，随后自动切入上课进行中阶段。",
+            notes = "@$courseLocation · 临近课程实况通知演练：前 15 秒展示课前倒计时，随后自动切入上课进行中阶段。",
             startTimeMillis = now + 15_000L,
             endTimeMillis = now + 75_000L,
             repeatRule = RepeatRule.NONE,

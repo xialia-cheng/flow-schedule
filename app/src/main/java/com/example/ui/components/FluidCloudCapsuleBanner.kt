@@ -71,9 +71,9 @@ fun FluidCloudCapsuleBanner(
     val chipText = item.capsuleChipText(nowMillis)
     val locationText = item.rawLocationName()
     val phaseLabel = when {
-        isInProgress && item.sourceType == LiveActivitySourceType.COURSE -> "流体云 · 正在上课"
-        isInProgress -> "流体云 · 进行中"
-        else -> "流体云 · 课前临近"
+        isInProgress && item.sourceType == LiveActivitySourceType.COURSE -> "实况通知 · 正在上课"
+        isInProgress -> "实况通知 · 进行中"
+        else -> "实况通知 · 课前临近"
     }
 
     val pulseTransition = rememberInfiniteTransition(label = "fluid_cloud_live_dot")
@@ -187,7 +187,7 @@ fun FluidCloudCapsuleBanner(
                 val statusHint = if (permissionStatus.allRecommendedGranted) {
                     "$phaseLabel · 剩余 $remainingStr"
                 } else {
-                    "$phaseLabel · 剩余 $remainingStr · 点击检查流体云权限"
+                    "$phaseLabel · 剩余 $remainingStr · 点击检查实况通知权限"
                 }
                 Text(
                     text = statusHint,

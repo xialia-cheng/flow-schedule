@@ -409,7 +409,7 @@ fun SectionTimesEditorSheet(
 
                 item(key = "bottom_sync_note") {
                     Text(
-                        text = "保存后立即同步课表左侧时间轴、已有课程起止时间，并重新计算所有精确闹钟与流体云倒计时。",
+                        text = "保存后立即同步课表左侧时间轴、已有课程起止时间，并重新计算所有精确闹钟与实况通知倒计时。",
                         style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,

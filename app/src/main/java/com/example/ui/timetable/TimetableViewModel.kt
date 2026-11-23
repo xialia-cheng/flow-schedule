@@ -354,7 +354,7 @@ class TimetableViewModel(
         viewModelScope.launch {
             val normalized = BellScheduleGenerator.normalize(times, ttId)
             timetableRepository.saveSectionTimes(ttId, normalized)
-            emitMessage("已保存 ${normalized.size} 节作息，课表与流体云闹钟已同步")
+            emitMessage("已保存 ${normalized.size} 节作息，课表与实况通知闹钟已同步")
         }
     }
 

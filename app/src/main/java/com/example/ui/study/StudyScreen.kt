@@ -133,7 +133,7 @@ fun StudyScreen(
                             color = colorScheme.onBackground,
                         )
                         Text(
-                            text = "自定义专注/休息时长 · 支持流体云与免打扰联动",
+                            text = "自定义专注/休息时长 · 支持实况通知与免打扰联动",
                             style = MaterialTheme.typography.bodySmall,
                             color = colorScheme.onSurfaceVariant,
                         )
@@ -627,13 +627,13 @@ private fun PomodoroFocusCard(
                         )
                         Column {
                             Text(
-                                text = "联动流体云实时活动",
+                                text = "联动实况通知",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = colorScheme.onSurface,
                             )
                             Text(
-                                text = "开始计时后在顶部胶囊同步显示倒计时与事件名",
+                                text = "开始计时后在状态栏实况胶囊或实时进度通知中同步显示倒计时与事件名",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colorScheme.onSurfaceVariant,
                             )
@@ -874,9 +874,9 @@ private fun CustomFocusConfigDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text("联动流体云实时活动", style = MaterialTheme.typography.bodyMedium)
+                        Text("联动实况通知", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "跨应用在系统胶囊中倒计时",
+                            "跨应用在状态栏实况胶囊或实时进度通知中倒计时",
                             style = MaterialTheme.typography.bodySmall,
                             color = colorScheme.onSurfaceVariant,
                         )

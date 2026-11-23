@@ -1,6 +1,6 @@
 {
   "name": "流云日程",
-  "description": "纯本地离线运行的原生 Android 课程表与日程提醒应用，支持一句话中文离线解析与可选自定义 OpenAI 兼容接口、时间冲突检测、Jetpack Glance 桌面小组件，深度适配 Material 3 动态取色与 ColorOS 17 流体云 Live Updates 实时活动。",
+  "description": "纯本地离线运行的原生 Android 课程表与日程提醒应用，支持一句话中文离线解析与可选自定义 OpenAI 兼容接口、时间冲突检测、Jetpack Glance 桌面小组件，深度适配 Material 3 动态取色与 Android 16+ Live Updates 实况通知。",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

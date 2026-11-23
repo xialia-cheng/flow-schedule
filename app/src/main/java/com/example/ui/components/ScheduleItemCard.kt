@@ -553,7 +553,7 @@ fun ScheduleItemCard(
     }
 }
 
-@Preview(name = "ColorOS 17 Schedule List - Light", showBackground = true, backgroundColor = 0xFFF3F6FB)
+@Preview(name = "Schedule List - Light", showBackground = true, backgroundColor = 0xFFF3F6FB)
 @Composable
 private fun PreviewScheduleListLight() {
     val now = 1_760_000_000_000L
@@ -568,7 +568,7 @@ private fun PreviewScheduleListLight() {
             ScheduleItemCard(
                 schedule = ScheduleEntity(
                     id = 1L,
-                    title = "ColorOS 17 流体云交互评审",
+                    title = "实况通知交互评审",
                     notes = "三楼星河会议室 · 带上真机演示",
                     startTimeMillis = now - 15 * 60_000L,
                     endTimeMillis = now + 30 * 60_000L,
@@ -607,7 +607,7 @@ private fun PreviewScheduleListLight() {
     }
 }
 
-@Preview(name = "ColorOS 17 Schedule List - Dark", showBackground = true, backgroundColor = 0xFF090C12)
+@Preview(name = "Schedule List - Dark", showBackground = true, backgroundColor = 0xFF090C12)
 @Composable
 private fun PreviewScheduleListDark() {
     val now = 1_760_000_000_000L
@@ -622,7 +622,7 @@ private fun PreviewScheduleListDark() {
             ScheduleItemCard(
                 schedule = ScheduleEntity(
                     id = 1L,
-                    title = "ColorOS 17 流体云交互评审",
+                    title = "实况通知交互评审",
                     notes = "三楼星河会议室 · 带上真机演示",
                     startTimeMillis = now - 15 * 60_000L,
                     endTimeMillis = now + 30 * 60_000L,

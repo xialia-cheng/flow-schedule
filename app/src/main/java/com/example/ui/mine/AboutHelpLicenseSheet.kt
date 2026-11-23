@@ -333,11 +333,11 @@ fun AboutHelpLicenseSheet(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     HelpBulletItem(
                         heading = "精确闹钟与后台无限制 / 自启动",
-                        body = "请在系统设置中授予“闹钟和提醒”精确闹钟权限，并将本应用的电池策略设为“无限制”（ColorOS / 澎湃 OS 等系统建议同时允许自启动），以确保课前提醒、00:00 跨天更新与下课自动消隐胶囊在息屏后台状态下准时触发。",
+                        body = "请在系统设置中授予“闹钟和提醒”精确闹钟权限，并将本应用的电池策略设为“无限制”（部分系统建议同时允许自启动），以确保课前提醒、00:00 跨天更新与下课自动消隐通知在息屏后台状态下准时触发。",
                     )
                     HelpBulletItem(
-                        heading = "ColorOS 17 流体云 / 实时通知权限",
-                        body = "在 ColorOS 17（OPPO / 一加）及适配 Android 16 原生 Live Updates 的设备上，需开启通知权限与“实时活动（流体云）”权限以显示状态栏动态胶囊。其他未接管 Android 16 原生 Live Updates 的机型或旧版本系统将自动降级为标准高优先级进度通知（保留 Chronometer 实时倒计时与快捷操作，不影响提醒）。",
+                        heading = "实况通知 / 实时活动权限",
+                        body = "基于 Android 16+ 原生 Live Updates（实时更新）接口实现，支持已接入该标准的系统级胶囊（如 ColorOS 流体云等），其余系统自动降级为标准常驻进度通知（保留 Chronometer 实时倒计时与快捷操作，不影响提醒）。在支持实况通知的设备上，需在系统设置中开启通知与“实时活动”权限。",
                     )
                     HelpBulletItem(
                         heading = "系统勿扰权限开启方法",

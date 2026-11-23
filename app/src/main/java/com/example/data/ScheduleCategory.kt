@@ -16,7 +16,7 @@ enum class ScheduleCategory(val label: String, val accentColor: Color) {
     FOCUS("专注", CategoryFocus),
     LIFE("生活", CategoryLife),
     HEALTH("健康", CategoryHealth),
-    TEST("流体云测试", CategoryTest),
+    TEST("实况通知测试", CategoryTest),
 }
 
 data class CustomScheduleTag(
