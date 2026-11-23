@@ -109,7 +109,7 @@ object TimetableImportExport {
                 colorCursor++
             }
         }
-        return parsed
+        return assignConsistentColorsByName(parsed)
     }
 
     /**
@@ -259,7 +259,7 @@ object TimetableImportExport {
                 }
             }
         }
-        return result
+        return assignConsistentColorsByName(result)
     }
 
     /**
@@ -393,6 +393,15 @@ object TimetableImportExport {
             )
         } else {
             null
+        }
+    }
+
+    private fun assignConsistentColorsByName(courses: List<CourseEntity>): List<CourseEntity> {
+        val colorByName = LinkedHashMap<String, Int>()
+        return courses.map { course ->
+            val key = course.name.trim()
+            val assigned = colorByName.getOrPut(key) { colorByName.size }
+            course.copy(colorIndex = assigned)
         }
     }
 
