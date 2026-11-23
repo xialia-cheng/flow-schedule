@@ -369,7 +369,8 @@ class LiveUpdateManager(private val context: Context) {
         val dndActive = isDoNotDisturbActive()
         val colorKey = activeItem.accentColorArgb ?: 0
         val displayMetaKey = "${activeItem.showLocation}:${activeItem.showTeacher}:${activeItem.showNotes}:${activeItem.title}:${activeItem.isBreakPhase}"
-        val postSignature = "${activeItem.uniqueKey}|$isInProgress|$targetMillis|$dndActive|$progressBucket|$colorKey|$displayMetaKey"
+        val stageIconBucket = resolveStageBucket(activeItem, nowMillis)
+        val postSignature = "${activeItem.uniqueKey}|$isInProgress|$stageIconBucket|$targetMillis|$dndActive|$progressBucket|$colorKey|$displayMetaKey"
 
         // Avoid redundant notify() calls that would interrupt SystemUI's native Chronometer ticker
         if (!forceAlert && postSignature == currentlyPostedSignature) {
@@ -449,6 +450,24 @@ class LiveUpdateManager(private val context: Context) {
         refreshPermissionStatus()
     }
 
+    private fun resolveStageBucket(item: LiveActivityItem, nowMillis: Long): Int {
+        if (!item.isInProgress(nowMillis)) return 0 // 课前准备
+        val remainingMillis = (item.endTimeMillis - nowMillis).coerceAtLeast(0L)
+        return if (remainingMillis <= 10 * 60_000L) 2 else 1 // 2 = 即将结束(<=10分钟), 1 = 正在进行
+    }
+
+    private fun resolveSmallIconRes(item: LiveActivityItem, nowMillis: Long): Int {
+        return when (resolveStageBucket(item, nowMillis)) {
+            0 -> R.drawable.ic_stat_course_prep
+            2 -> R.drawable.ic_stat_course_ending
+            else -> if (item.sourceType == LiveActivitySourceType.COURSE) {
+                R.drawable.ic_stat_course_live
+            } else {
+                R.drawable.ic_stat_flow_schedule
+            }
+        }
+    }
+
     @RequiresApi(ANDROID_16_API_LEVEL)
     private fun buildAndroid16LiveUpdateNotification(
         item: LiveActivityItem,
@@ -490,11 +509,7 @@ class LiveUpdateManager(private val context: Context) {
         val activeSegmentColor = baseAccentColor
         val milestonePointColor = blendColorArgb(baseAccentColor, Color.WHITE, 0.62f)
         val themeAccentColor = baseAccentColor
-        val smallIconRes = if (item.sourceType == LiveActivitySourceType.COURSE) {
-            R.drawable.ic_stat_course_live
-        } else {
-            R.drawable.ic_stat_flow_schedule
-        }
+        val smallIconRes = resolveSmallIconRes(item, nowMillis)
 
         // Distinct 2-stage segmented ProgressStyle dynamically tinted with current course/schedule color
         val progressStyle = Notification.ProgressStyle()
@@ -598,11 +613,7 @@ class LiveUpdateManager(private val context: Context) {
         val contentText = item.expandedContentText(nowMillis)
         val themeAccentColor = item.accentColorArgb
             ?: if (isInProgress) COLOR_ACCENT_ACTIVE else COLOR_ACCENT_PREP
-        val smallIconRes = if (item.sourceType == LiveActivitySourceType.COURSE) {
-            R.drawable.ic_stat_course_live
-        } else {
-            R.drawable.ic_stat_flow_schedule
-        }
+        val smallIconRes = resolveSmallIconRes(item, nowMillis)
 
         val remainingEndMillis = (item.endTimeMillis - nowMillis).coerceAtLeast(1_000L)
         val liveExtras = Bundle().apply {
