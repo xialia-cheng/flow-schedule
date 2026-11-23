@@ -360,6 +360,7 @@ fun TimetableScreen(
         }
         val totalGridHeight = sectionHeight * sectionCount + lunchBreakHeight
 
+        Spacer(modifier = Modifier.height(4.dp))
         HorizontalDivider(
             thickness = 0.5.dp,
             color = colorScheme.outlineVariant.copy(alpha = 0.45f),
@@ -415,7 +416,7 @@ fun TimetableScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .verticalScroll(scrollState)
-                                    .padding(top = 6.dp, bottom = 24.dp),
+                                    .padding(bottom = 24.dp),
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -1479,7 +1480,6 @@ private fun SectionTimeAxisColumn(
                         .testTag("timetable_section_axis_$section"),
                 ) {
                     if (animatedProgress > 0f) {
-                        val barColor = colorScheme.primary.copy(alpha = if (isCurrentSection) 0.90f else 0.35f)
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val progressY = (size.height * animatedProgress.coerceIn(0f, 1f))
                             if (isCurrentSection) {
@@ -1507,18 +1507,7 @@ private fun SectionTimeAxisColumn(
                                     size = Size(size.width, progressY),
                                 )
                             }
-                            drawRect(
-                                color = barColor,
-                                topLeft = Offset.Zero,
-                                size = Size(2.5.dp.toPx(), progressY),
-                            )
-                            if (isCurrentSection) {
-                                drawCircle(
-                                    color = colorScheme.primary,
-                                    radius = 3.dp.toPx(),
-                                    center = Offset(2.5.dp.toPx(), progressY),
-                                )
-                            }
+
                         }
                     }
 
@@ -1638,11 +1627,7 @@ private fun SectionTimeAxisColumn(
                                     topLeft = Offset.Zero,
                                     size = Size(size.width, py),
                                 )
-                                drawRect(
-                                    color = colorScheme.primary.copy(alpha = if (lunchElapsed < 1f) 0.90f else 0.35f),
-                                    topLeft = Offset.Zero,
-                                    size = Size(2.5.dp.toPx(), py),
-                                )
+
                             }
                         }
                         Column(
