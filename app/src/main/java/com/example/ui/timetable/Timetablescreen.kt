@@ -313,7 +313,7 @@ fun TimetableScreen(
         }
 
         // 3. Optional Custom Extra Time Slot Bar (e.g. Morning Exercise, shown in Week View)
-        if (state.settings.showMorningExercise && !compactMode && state.viewMode == TimetableViewMode.WEEK) {
+        if (state.settings.showMorningExercise && !compactMode && state.viewMode == TimetableViewMode.WEEK && !state.isMorningExerciseCheckedToday) {
             MorningExerciseStrip(
                 title = state.settings.extraBannerTitle,
                 startTime = state.settings.extraBannerStartTime,
@@ -665,11 +665,19 @@ fun TimetableScreen(
     }
 
     inspectingCourse?.let { course ->
+        val otherSlotCourses = state.courses.filter { other ->
+            other.id != course.id &&
+                other.dayOfWeek == course.dayOfWeek &&
+                other.startSection <= course.endSection &&
+                course.startSection <= other.endSection
+        }
         CourseDetailDialog(
             course = course,
             sectionTimes = state.sectionTimes,
             displayedWeek = state.displayedWeek,
+            otherSlotCourses = otherSlotCourses,
             canEdit = isEditMode,
+            onSelectCourse = { inspectingCourse = it },
             onDismiss = { inspectingCourse = null },
             onEdit = { target ->
                 editingCourse = target
