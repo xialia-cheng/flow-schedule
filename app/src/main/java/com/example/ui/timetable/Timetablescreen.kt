@@ -102,6 +102,8 @@ import com.example.ui.components.FluidCloudCapsuleBanner
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 import kotlinx.coroutines.delay
+import android.view.HapticFeedbackConstants
+import androidx.compose.ui.platform.LocalView
 import java.util.Calendar
 
 @Composable
@@ -118,6 +120,10 @@ fun TimetableScreen(
     onTriggerFluidCloudTest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val view = LocalView.current
+    val tapHaptic: () -> Unit = {
+        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val toastMessage by viewModel.toastMessage.collectAsStateWithLifecycle()
 
@@ -319,7 +325,7 @@ fun TimetableScreen(
                 startTime = state.settings.extraBannerStartTime,
                 endTime = state.settings.extraBannerEndTime,
                 checkedToday = state.isMorningExerciseCheckedToday,
-                onToggleCheckIn = { viewModel.toggleMorningExerciseCheckIn() },
+                onToggleCheckIn = { tapHaptic(); viewModel.toggleMorningExerciseCheckIn() },
             )
         }
 
@@ -602,7 +608,7 @@ fun TimetableScreen(
                                                 isCurrentWeek = isCurrentWeekCourse,
                                                 compactMode = compactMode,
                                                 fontScale = fontScale,
-                                                onClick = { inspectingCourse = course },
+                                                onClick = { tapHaptic(); inspectingCourse = course },
                                                 modifier = Modifier
                                                     .offset(x = leftOffset, y = topOffset)
                                                     .width(colWidth)
@@ -678,7 +684,7 @@ fun TimetableScreen(
 
             // Compact sparkle trigger button (bottom-right) — input sheet stays hidden until tapped
             FloatingActionButton(
-                onClick = onOpenSmartCapture,
+                onClick = { tapHaptic(); onOpenSmartCapture() },
                 containerColor = colorScheme.primaryContainer,
                 contentColor = colorScheme.onPrimaryContainer,
                 shape = CircleShape,
@@ -847,6 +853,10 @@ private fun TimetableTopBar(
     onMoreClick: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val view = LocalView.current
+    val tapHaptic: () -> Unit = {
+        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
     val isSelectedToday = DateTimeUtils.isSameDay(state.selectedDateMillis, nowMillis)
 
     Column(
@@ -864,7 +874,7 @@ private fun TimetableTopBar(
                 modifier = Modifier
                     .weight(1f)
                     .clip(MaterialTheme.shapes.small)
-                    .clickable(onClick = onTapWeekHeader)
+                    .clickable { tapHaptic(); onTapWeekHeader() }
                     .padding(vertical = 2.dp, horizontal = 2.dp)
                     .testTag("timetable_week_header"),
                 verticalAlignment = Alignment.CenterVertically,
@@ -881,15 +891,23 @@ private fun TimetableTopBar(
                 if (!state.isViewingCurrentWeek) {
                     Surface(
                         shape = CircleShape,
-                        color = colorScheme.tertiaryContainer,
+                        color = colorScheme.tertiary,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable {
+                                tapHaptic()
+                                onJumpToday()
+                            },
                     ) {
                         Text(
                             text = "回第${state.currentActualWeek}周",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colorScheme.onTertiaryContainer,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = colorScheme.onTertiary,
                             maxLines = 1,
                             softWrap = false,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                     }
                 } else if (!state.settings.compactMode && state.activeTimetable != null) {
@@ -912,7 +930,7 @@ private fun TimetableTopBar(
             // Right: Import, Share, More
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
-                    onClick = onImportClick,
+                    onClick = { tapHaptic(); onImportClick() },
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
                         .testTag("timetable_import_button"),
@@ -924,7 +942,7 @@ private fun TimetableTopBar(
                     )
                 }
                 IconButton(
-                    onClick = onShareClick,
+                    onClick = { tapHaptic(); onShareClick() },
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
                         .testTag("timetable_share_button"),
@@ -936,7 +954,7 @@ private fun TimetableTopBar(
                     )
                 }
                 IconButton(
-                    onClick = onMoreClick,
+                    onClick = { tapHaptic(); onMoreClick() },
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
                         .testTag("timetable_more_button"),
@@ -975,20 +993,24 @@ private fun TimetableTopBar(
                 if (!isSelectedToday) {
                     Surface(
                         shape = CircleShape,
-                        color = colorScheme.secondaryContainer,
+                        color = colorScheme.primary,
+                        shadowElevation = 2.dp,
                         modifier = Modifier
                             .clip(CircleShape)
-                            .clickable(onClick = onJumpToday)
+                            .clickable {
+                                tapHaptic()
+                                onJumpToday()
+                            }
                             .testTag("timetable_jump_today_pill"),
                     ) {
                         Text(
                             text = "回今天",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colorScheme.onSecondaryContainer,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = colorScheme.onPrimary,
                             maxLines = 1,
                             softWrap = false,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                     }
                 }
@@ -1008,7 +1030,7 @@ private fun TimetableTopBar(
                     ),
                     modifier = Modifier
                         .clip(CircleShape)
-                        .clickable(onClick = onToggleEditMode)
+                        .clickable { tapHaptic(); onToggleEditMode() }
                         .testTag("timetable_edit_mode_toggle"),
                 ) {
                     Row(
@@ -1044,7 +1066,7 @@ private fun TimetableTopBar(
                     ),
                     modifier = Modifier
                         .clip(CircleShape)
-                        .clickable(onClick = onToggleViewMode)
+                        .clickable { tapHaptic(); onToggleViewMode() }
                         .testTag("timetable_view_mode_toggle"),
                 ) {
                     Row(
