@@ -43,7 +43,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -67,6 +69,7 @@ import com.example.ui.theme.FlowMotion
 import com.example.ui.theme.FlowTheme
 import com.example.ui.timetable.TimetableScreen
 import com.example.ui.timetable.TimetableViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -88,6 +91,7 @@ fun AppRootScreen(
     val smartState by smartCaptureViewModel.uiState.collectAsStateWithLifecycle()
     val snackbarEvent by scheduleViewModel.snackbarEvent.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val rootView = LocalView.current
     val scope = rememberCoroutineScope()
 
     val colorScheme = MaterialTheme.colorScheme
@@ -105,6 +109,7 @@ fun AppRootScreen(
 
     LaunchedEffect(snackbarEvent?.id) {
         val event = snackbarEvent ?: return@LaunchedEffect
+        snackbarHostState.currentSnackbarData?.dismiss()
         val result = snackbarHostState.showSnackbar(
             message = event.message,
             actionLabel = if (event.canUndoDelete) undoLabel else null,
@@ -123,10 +128,19 @@ fun AppRootScreen(
 
     val showMessage: (String) -> Unit = { msg ->
         scope.launch {
-            snackbarHostState.showSnackbar(
-                message = msg,
-                duration = SnackbarDuration.Short,
-            )
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val autoDismissJob = launch {
+                delay(1_400L)
+                snackbarHostState.currentSnackbarData?.dismiss()
+            }
+            try {
+                snackbarHostState.showSnackbar(
+                    message = msg,
+                    duration = SnackbarDuration.Short,
+                )
+            } finally {
+                autoDismissJob.cancel()
+            }
         }
     }
 
@@ -189,7 +203,7 @@ fun AppRootScreen(
                             val selected = currentTab == destination
                             NavigationRailItem(
                                 selected = selected,
-                                onClick = { currentTab = destination },
+                                onClick = { rootView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); currentTab = destination },
                                 icon = {
                                     Icon(
                                         imageVector = if (selected) destination.selectedIcon else destination.unselectedIcon,
