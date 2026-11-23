@@ -1931,7 +1931,12 @@ private fun CourseGridCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 2.dp, vertical = 4.dp),
+                .padding(
+                    start = 2.dp,
+                    end = 2.dp,
+                    top = if (spanSections == 1) 5.dp else 7.dp,
+                    bottom = 4.dp,
+                ),
             contentAlignment = Alignment.TopCenter,
         ) {
             Column(
