@@ -329,7 +329,29 @@ fun TimetableScreen(
             BellScheduleGenerator.MIN_SECTION_COUNT,
             BellScheduleGenerator.MAX_SECTION_COUNT,
         )
-        val totalGridHeight = sectionHeight * sectionCount
+        val lunchAfterSection: Int? = remember(state.sectionTimes, sectionCount) {
+            val ordered = state.sectionTimes.filter { it.sectionNumber in 1..sectionCount }.sortedBy { it.sectionNumber }
+            var bestSec: Int? = null
+            var bestGap = 44 // >= 45 minutes midday gap qualifies as lunch break
+            for (i in 0 until ordered.lastIndex) {
+                val cur = ordered[i]
+                val nxt = ordered[i + 1]
+                val curEndMin = cur.endHour * 60 + cur.endMinute
+                val nxtStartMin = nxt.startHour * 60 + nxt.startMinute
+                val gap = nxtStartMin - curEndMin
+                if (curEndMin in (11 * 60)..(14 * 60) && gap > bestGap) {
+                    bestGap = gap
+                    bestSec = cur.sectionNumber
+                }
+            }
+            bestSec
+        }
+        val lunchBreakHeight = if (lunchAfterSection != null) {
+            if (compactMode) 22.dp else 28.dp
+        } else {
+            0.dp
+        }
+        val totalGridHeight = sectionHeight * sectionCount + lunchBreakHeight
 
         Box(
             modifier = Modifier
@@ -394,6 +416,8 @@ fun TimetableScreen(
                                         sectionTimes = state.sectionTimes,
                                         sectionCount = sectionCount,
                                         sectionHeight = sectionHeight,
+                                        lunchAfterSection = lunchAfterSection,
+                                        lunchBreakHeight = lunchBreakHeight,
                                         compactMode = compactMode,
                                         nowMillis = liveNowMillis,
                                         highlightCurrentSection = pageWeek == state.currentActualWeek,
@@ -439,9 +463,19 @@ fun TimetableScreen(
                                                 )
                                             }
 
+                                            if (lunchAfterSection != null && lunchBreakHeight > 0.dp) {
+                                                val lunchY = (sectionHeight * lunchAfterSection).toPx()
+                                                val lunchH = lunchBreakHeight.toPx()
+                                                drawRect(
+                                                    color = colorScheme.surfaceContainerLow.copy(alpha = 0.72f),
+                                                    topLeft = Offset(0f, lunchY),
+                                                    size = Size(size.width, lunchH),
+                                                )
+                                            }
                                             val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
                                             for (sec in 1..sectionCount) {
-                                                val y = (sectionHeight * sec).toPx()
+                                                val extraLunch = if (lunchAfterSection != null && sec > lunchAfterSection) lunchBreakHeight else 0.dp
+                                                val y = (sectionHeight * sec + extraLunch).toPx()
                                                 drawLine(
                                                     color = gridLineColor,
                                                     start = Offset(0f, y),
@@ -449,6 +483,16 @@ fun TimetableScreen(
                                                     strokeWidth = 1.dp.toPx(),
                                                     pathEffect = dash,
                                                 )
+                                                if (lunchAfterSection != null && sec == lunchAfterSection && lunchBreakHeight > 0.dp) {
+                                                    val lunchTopY = (sectionHeight * sec).toPx()
+                                                    drawLine(
+                                                        color = gridLineColor,
+                                                        start = Offset(0f, lunchTopY),
+                                                        end = Offset(size.width, lunchTopY),
+                                                        strokeWidth = 1.dp.toPx(),
+                                                        pathEffect = dash,
+                                                    )
+                                                }
                                             }
                                             for (col in 1 until dayCount) {
                                                 val x = (colWidth * col).toPx()
@@ -462,6 +506,30 @@ fun TimetableScreen(
                                         }
 
                                         // Empty slots are ONLY clickable in Edit Mode to prevent accidental popups while browsing/swiping
+                                        if (lunchAfterSection != null && lunchBreakHeight > 0.dp) {
+                                            val beforeSlot = state.sectionTimes.find { it.sectionNumber == lunchAfterSection }
+                                            val afterSlot = state.sectionTimes.find { it.sectionNumber == lunchAfterSection + 1 }
+                                            val lunchText = if (beforeSlot != null && afterSlot != null) {
+                                                "午休时间 · ${beforeSlot.endLabel()} - ${afterSlot.startLabel()}"
+                                            } else {
+                                                "午休时间"
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .offset(y = sectionHeight * lunchAfterSection)
+                                                    .fillMaxWidth()
+                                                    .height(lunchBreakHeight),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Text(
+                                                    text = lunchText,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontSize = 10.sp,
+                                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                                                )
+                                            }
+                                        }
+
                                         if (isEditMode) {
                                             Column(modifier = Modifier.fillMaxSize()) {
                                                 for (section in 1..sectionCount) {
@@ -483,6 +551,9 @@ fun TimetableScreen(
                                                                     },
                                                             )
                                                         }
+                                                    }
+                                                    if (lunchAfterSection == section && lunchBreakHeight > 0.dp) {
+                                                        Spacer(modifier = Modifier.height(lunchBreakHeight))
                                                     }
                                                 }
                                             }
@@ -519,9 +590,11 @@ fun TimetableScreen(
                                             val isCurrentWeekCourse = course.isInWeek(pageWeek)
                                             val clampedStart = course.startSection.coerceIn(1, sectionCount)
                                             val clampedEnd = course.endSection.coerceIn(clampedStart, sectionCount)
-                                            val topOffset = sectionHeight * (clampedStart - 1)
+                                            val startLunchOffset = if (lunchAfterSection != null && clampedStart > lunchAfterSection) lunchBreakHeight else 0.dp
+                                            val crossesLunch = lunchAfterSection != null && clampedStart <= lunchAfterSection && clampedEnd > lunchAfterSection
+                                            val topOffset = sectionHeight * (clampedStart - 1) + startLunchOffset
                                             val spanCount = (clampedEnd - clampedStart + 1).coerceAtLeast(1)
-                                            val cardHeight = sectionHeight * spanCount
+                                            val cardHeight = sectionHeight * spanCount + (if (crossesLunch) lunchBreakHeight else 0.dp)
                                             val leftOffset = colWidth * colIdx
 
                                             CourseGridCard(
@@ -1273,6 +1346,8 @@ private fun SectionTimeAxisColumn(
     sectionTimes: List<SectionTimeEntity>,
     sectionCount: Int,
     sectionHeight: Dp,
+    lunchAfterSection: Int?,
+    lunchBreakHeight: Dp,
     compactMode: Boolean,
     nowMillis: Long,
     highlightCurrentSection: Boolean,
@@ -1478,6 +1553,79 @@ private fun SectionTimeAxisColumn(
                     }
 
                     if (section < sectionCount) {
+                        HorizontalDivider(
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                            thickness = 0.5.dp,
+                            color = dividerColor.copy(alpha = 0.65f),
+                        )
+                    }
+                }
+                if (lunchAfterSection == section && lunchBreakHeight > 0.dp) {
+                    val beforeSlot = sectionTimes.find { it.sectionNumber == section }
+                    val afterSlot = sectionTimes.find { it.sectionNumber == section + 1 }
+                    val lunchRangeText = if (beforeSlot != null && afterSlot != null) {
+                        "${beforeSlot.endLabel()}-${afterSlot.startLabel()}"
+                    } else {
+                        ""
+                    }
+                    val lunchProgress = if (highlightCurrentSection && beforeSlot != null && afterSlot != null) {
+                        val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
+                        val nowSec = cal.get(Calendar.HOUR_OF_DAY) * 3600 + cal.get(Calendar.MINUTE) * 60 + cal.get(Calendar.SECOND)
+                        val startSec = beforeSlot.endHour * 3600 + beforeSlot.endMinute * 60
+                        val endSec = afterSlot.startHour * 3600 + afterSlot.startMinute * 60
+                        if (endSec > startSec && nowSec in startSec until endSec) {
+                            ((nowSec - startSec).toFloat() / (endSec - startSec).toFloat()).coerceIn(0f, 1f)
+                        } else null
+                    } else null
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(lunchBreakHeight)
+                            .background(
+                                if (lunchProgress != null) {
+                                    colorScheme.tertiaryContainer.copy(alpha = 0.25f)
+                                } else {
+                                    colorScheme.surfaceContainerHighest.copy(alpha = 0.55f)
+                                },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (lunchProgress != null) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val py = (size.height * lunchProgress).coerceIn(2.dp.toPx(), size.height)
+                                drawRect(
+                                    color = colorScheme.tertiary.copy(alpha = 0.36f),
+                                    topLeft = Offset.Zero,
+                                    size = Size(size.width, py),
+                                )
+                            }
+                        }
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = "午休",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                lineHeight = 11.sp,
+                                color = if (lunchProgress != null) colorScheme.tertiary else colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                            if (lunchRangeText.isNotEmpty() && !compactMode) {
+                                Text(
+                                    text = lunchRangeText,
+                                    fontFamily = MonoFontFamily,
+                                    fontSize = 8.sp,
+                                    lineHeight = 9.sp,
+                                    letterSpacing = (-0.3).sp,
+                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
+                        }
                         HorizontalDivider(
                             modifier = Modifier.align(Alignment.BottomCenter),
                             thickness = 0.5.dp,
