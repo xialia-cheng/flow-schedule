@@ -320,6 +320,7 @@ class LiveUpdateManager(private val context: Context) {
         ensureNotificationChannel()
         purgeExpiredNotificationIfNeeded(nowMillis)
 
+        lastSyncedCandidates = candidates
         val mergedCandidates = buildList {
             addAll(candidates)
             val focus = activeFocusItem
@@ -357,7 +358,7 @@ class LiveUpdateManager(private val context: Context) {
 
         val isInProgress = activeItem.isInProgress(nowMillis)
         val targetMillis = if (isInProgress) activeItem.endTimeMillis else activeItem.startTimeMillis
-        val progressBucket = activeItem.progressPermille(nowMillis) / 50
+        val progressBucket = activeItem.progressPermille(nowMillis) / 10
         val dndActive = isDoNotDisturbActive()
         val colorKey = activeItem.accentColorArgb ?: 0
         val displayMetaKey = "${activeItem.showLocation}:${activeItem.showTeacher}:${activeItem.showNotes}:${activeItem.title}:${activeItem.isBreakPhase}"
@@ -389,6 +390,7 @@ class LiveUpdateManager(private val context: Context) {
             notificationManager.notify(LIVE_UPDATE_NOTIFICATION_ID, notification)
         }
         refreshPermissionStatus()
+        ensureProgressTickerRunning()
         return activeItem
     }
 
@@ -407,7 +409,29 @@ class LiveUpdateManager(private val context: Context) {
         }
     }
 
+    private fun ensureProgressTickerRunning() {
+        if (progressTickerJob?.isActive == true) return
+        progressTickerJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            while (_activeLiveActivity.value != null) {
+                kotlinx.coroutines.delay(5_000L)
+                val current = _activeLiveActivity.value ?: break
+                val now = System.currentTimeMillis()
+                if (now >= current.endTimeMillis) {
+                    cancelLiveUpdate()
+                    break
+                }
+                syncLiveActivity(
+                    candidates = lastSyncedCandidates,
+                    nowMillis = now,
+                    forceAlert = false,
+                )
+            }
+        }
+    }
+
     fun cancelLiveUpdate() {
+        progressTickerJob?.cancel()
+        progressTickerJob = null
         notificationManager.cancel(LIVE_UPDATE_NOTIFICATION_ID)
         currentlyPostedKey = null
         currentlyPostedSourceId = null
@@ -480,11 +504,7 @@ class LiveUpdateManager(private val context: Context) {
                             Notification.ProgressStyle.Segment(700).setColor(activeSegmentColor),
                         ),
                     )
-                    setProgressPoints(
-                        listOf(
-                            Notification.ProgressStyle.Point(300).setColor(milestonePointColor),
-                        ),
-                    )
+                    setProgressPoints(emptyList())
                 } else {
                     setProgressSegments(
                         listOf(
