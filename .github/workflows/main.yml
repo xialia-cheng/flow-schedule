@@ -26,13 +26,20 @@ jobs:
         with:
           gradle-version: "9.3.1"
 
-      - name: Bump version (base-10) and restore fixed debug.keystore
+      - name: Auto-bump v2.x.x (base-10) and restore fixed debug.keystore
         run: |
-          TOTAL=$((2 + GITHUB_RUN_NUMBER))
+          LATEST_TAG=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/releases" | grep -o '"tag_name": *"v2\.[0-9]*\.[0-9]*"' | head -n 1 | grep -o '2\.[0-9]*\.[0-9]*' || true)
+          if [ -z "$LATEST_TAG" ]; then
+            TOTAL=1
+          else
+            CUR_MIN=$(echo "$LATEST_TAG" | cut -d. -f2)
+            CUR_PAT=$(echo "$LATEST_TAG" | cut -d. -f3)
+            TOTAL=$((CUR_MIN * 10 + CUR_PAT + 1))
+          fi
           MINOR=$((TOTAL / 10))
           PATCH=$((TOTAL % 10))
-          APP_VER="8.${MINOR}.${PATCH}"
-          VER_CODE=$((10 + GITHUB_RUN_NUMBER))
+          APP_VER="2.${MINOR}.${PATCH}"
+          VER_CODE=$((100 + TOTAL))
           echo "APP_VER=$APP_VER" >> $GITHUB_ENV
           sed -i "s/versionCode = [0-9]*/versionCode = $VER_CODE/" app/build.gradle.kts
           sed -i "s/versionName = \".*\"/versionName = \"$APP_VER\"/" app/build.gradle.kts
