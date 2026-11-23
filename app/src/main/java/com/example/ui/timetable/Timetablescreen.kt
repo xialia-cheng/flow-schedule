@@ -359,6 +359,10 @@ fun TimetableScreen(
         }
         val totalGridHeight = sectionHeight * sectionCount + lunchBreakHeight
 
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = colorScheme.outlineVariant.copy(alpha = 0.45f),
+        )
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -410,7 +414,7 @@ fun TimetableScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .verticalScroll(scrollState)
-                                    .padding(bottom = 24.dp),
+                                    .padding(top = 6.dp, bottom = 24.dp),
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -1477,12 +1481,31 @@ private fun SectionTimeAxisColumn(
                         val barColor = colorScheme.primary.copy(alpha = if (isCurrentSection) 0.90f else 0.35f)
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val progressY = (size.height * animatedProgress.coerceIn(0f, 1f))
-                            drawRect(
-                                color = passedBg,
-                                topLeft = Offset.Zero,
-                                size = Size(size.width, progressY),
-                            )
-                            // Subtle 2.5dp left edge rail showing daily time progression cleanly without slicing text
+                            if (isCurrentSection) {
+                                // Smooth vertical fade at the current-time boundary so there is no harsh cut
+                                val fadeStart = (progressY - 14.dp.toPx()).coerceAtLeast(0f)
+                                val fadeEnd = (progressY + 10.dp.toPx()).coerceAtMost(size.height)
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0f to passedBg,
+                                            (fadeStart / size.height).coerceIn(0f, 1f) to passedBg,
+                                            (fadeEnd / size.height).coerceIn(0f, 1f) to Color.Transparent,
+                                            1f to Color.Transparent,
+                                        ),
+                                        startY = 0f,
+                                        endY = size.height,
+                                    ),
+                                    topLeft = Offset.Zero,
+                                    size = size,
+                                )
+                            } else {
+                                drawRect(
+                                    color = passedBg,
+                                    topLeft = Offset.Zero,
+                                    size = Size(size.width, progressY),
+                                )
+                            }
                             drawRect(
                                 color = barColor,
                                 topLeft = Offset.Zero,
