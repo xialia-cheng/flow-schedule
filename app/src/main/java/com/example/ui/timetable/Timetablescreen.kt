@@ -1329,20 +1329,12 @@ private fun SectionTimeAxisColumn(
                 )
 
                 val numberColor = if (isCurrentSection) {
-                    colorScheme.primary
+                    colorScheme.tertiary
                 } else {
                     colorScheme.onSurface
                 }
-                val startTimeColor = if (isCurrentSection) {
-                    colorScheme.onPrimaryContainer
-                } else {
-                    colorScheme.onSurface
-                }
-                val endTimeColor = if (isCurrentSection) {
-                    colorScheme.onPrimaryContainer.copy(alpha = 0.92f)
-                } else {
-                    colorScheme.onSurface.copy(alpha = 0.88f)
-                }
+                val startTimeColor = colorScheme.onSurface
+                val endTimeColor = colorScheme.onSurface.copy(alpha = 0.88f)
 
                 Box(
                     modifier = Modifier
@@ -1352,20 +1344,20 @@ private fun SectionTimeAxisColumn(
                         .testTag("timetable_section_axis_$section"),
                 ) {
                     if (isCurrentSection) {
-                        val baseHighlight = colorScheme.primaryContainer.copy(
-                            alpha = (if (flowColors.isDark) 0.44f else 0.54f) + breathingPulse * 0.14f,
+                        val baseHighlight = colorScheme.tertiaryContainer.copy(
+                            alpha = if (flowColors.isDark) 0.14f else 0.16f,
                         )
-                        val fillTop = colorScheme.primary.copy(
-                            alpha = (if (flowColors.isDark) 0.22f else 0.16f) + breathingPulse * 0.06f,
+                        val fillTop = colorScheme.tertiary.copy(
+                            alpha = (if (flowColors.isDark) 0.34f else 0.30f) + breathingPulse * 0.05f,
                         )
-                        val fillBottom = colorScheme.primary.copy(
-                            alpha = (if (flowColors.isDark) 0.34f else 0.26f) + breathingPulse * 0.09f,
+                        val fillBottom = colorScheme.tertiary.copy(
+                            alpha = (if (flowColors.isDark) 0.48f else 0.44f) + breathingPulse * 0.07f,
                         )
-                        val frontLineColor = colorScheme.primary.copy(
-                            alpha = 0.52f + breathingPulse * 0.42f,
+                        val frontLineColor = colorScheme.tertiary.copy(
+                            alpha = 0.92f,
                         )
-                        val railTrackColor = colorScheme.primary.copy(alpha = 0.22f)
-                        val railFillColor = colorScheme.primary.copy(alpha = 0.80f + breathingPulse * 0.20f)
+                        val railTrackColor = colorScheme.tertiary.copy(alpha = 0.14f)
+                        val railFillColor = colorScheme.tertiary
 
                         // Layered breathing highlight backdrop + vertical elapsed-time progress fill + left rail bar
                         Canvas(modifier = Modifier.fillMaxSize()) {
