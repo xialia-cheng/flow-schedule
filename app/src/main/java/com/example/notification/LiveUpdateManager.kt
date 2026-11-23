@@ -23,7 +23,12 @@ import com.example.MainActivity
 import com.example.R
 import com.example.data.DateTimeUtils
 import com.example.data.DndLevel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -55,6 +60,8 @@ class LiveUpdateManager(private val context: Context) {
     private var lastPromotableCharacteristics: Boolean? = null
 
     private var activeFocusItem: LiveActivityItem? = null
+    private var progressTickerJob: Job? = null
+    private var lastSyncedCandidates: List<LiveActivityItem> = emptyList()
 
     private var dndEnabledByApp: Boolean
         get() = runtimePrefs.getBoolean(KEY_DND_ENABLED_BY_APP, false)
@@ -411,9 +418,9 @@ class LiveUpdateManager(private val context: Context) {
 
     private fun ensureProgressTickerRunning() {
         if (progressTickerJob?.isActive == true) return
-        progressTickerJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+        progressTickerJob = CoroutineScope(Dispatchers.Default).launch {
             while (_activeLiveActivity.value != null) {
-                kotlinx.coroutines.delay(5_000L)
+                delay(5_000L)
                 val current = _activeLiveActivity.value ?: break
                 val now = System.currentTimeMillis()
                 if (now >= current.endTimeMillis) {
