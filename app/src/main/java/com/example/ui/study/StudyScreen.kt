@@ -1,6 +1,18 @@
 package com.example.ui.study
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -529,8 +541,21 @@ private fun PomodoroFocusCard(
 
             // Circular focus dial
             val trackColor = colorScheme.surfaceContainerHigh
-            val accentStart = if (isBreakPhase) flowColors.completedAccent else flowColors.secondaryAccent
-            val accentEnd = if (isBreakPhase) flowColors.completedAccent else flowColors.liveAccent
+            val accentStart by animateColorAsState(
+                targetValue = if (isBreakPhase) flowColors.completedAccent else flowColors.secondaryAccent,
+                animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
+                label = "study_dial_accent_start",
+            )
+            val accentEnd by animateColorAsState(
+                targetValue = if (isBreakPhase) flowColors.completedAccent else flowColors.liveAccent,
+                animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
+                label = "study_dial_accent_end",
+            )
+            val phaseLabelColor by animateColorAsState(
+                targetValue = if (isBreakPhase) flowColors.completedAccent else colorScheme.primary,
+                animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+                label = "study_phase_label_color",
+            )
 
             Box(
                 modifier = Modifier.size(188.dp),
@@ -556,12 +581,20 @@ private fun PomodoroFocusCard(
                     )
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = if (isBreakPhase) "休息时段" else "专注时段",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isBreakPhase) flowColors.completedAccent else colorScheme.primary,
-                    )
+                    AnimatedContent(
+                        targetState = isBreakPhase,
+                        transitionSpec = {
+                            fadeIn(tween(240)) togetherWith fadeOut(tween(160))
+                        },
+                        label = "study_dial_phase_label",
+                    ) { breakActive ->
+                        Text(
+                            text = if (breakActive) "休息时段" else "专注时段",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = phaseLabelColor,
+                        )
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = formattedClock,
@@ -580,6 +613,45 @@ private fun PomodoroFocusCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 24.dp),
                     )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = state.isTimerRunning && state.linkFluidCloud,
+                enter = fadeIn(tween(280, easing = FastOutSlowInEasing)) +
+                    expandVertically(expandFrom = Alignment.Top) +
+                    scaleIn(initialScale = 0.95f, animationSpec = tween(260)),
+                exit = fadeOut(tween(200, easing = FastOutSlowInEasing)) +
+                    shrinkVertically(shrinkTowards = Alignment.Top) +
+                    scaleOut(targetScale = 0.95f, animationSpec = tween(180)),
+                label = "study_fluid_cloud_live_pill",
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = accentEnd.copy(alpha = if (flowColors.isDark) 0.18f else 0.12f),
+                    border = BorderStroke(1.dp, accentEnd.copy(alpha = 0.42f)),
+                    modifier = Modifier.testTag("study_fluid_cloud_active_pill"),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CloudQueue,
+                            contentDescription = null,
+                            tint = accentEnd,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            text = if (isBreakPhase) "实况胶囊同步中 · 休息倒计时" else "实况胶囊同步中 · ${state.activeFocusLabel}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = accentEnd,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
 

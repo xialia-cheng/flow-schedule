@@ -13,8 +13,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import com.example.ui.theme.FlowMotion
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -343,13 +346,41 @@ fun TimetableScreen(
         )
 
         // 2.5 Active ColorOS 17 Fluid Cloud / Android 16 Live Activity real-time capsule strip
-        if (activeLiveActivity != null && activeLiveActivity.isLiveEligible(liveNowMillis)) {
-            FluidCloudCapsuleBanner(
-                item = activeLiveActivity,
-                permissionStatus = permissionStatus,
-                nowMillis = liveNowMillis,
-                onOpenPermissions = onOpenPermissions,
-            )
+        val isFluidCloudVisible = activeLiveActivity != null && activeLiveActivity.isLiveEligible(liveNowMillis)
+        var retainedFluidCloudItem by remember { mutableStateOf<LiveActivityItem?>(null) }
+        if (isFluidCloudVisible && activeLiveActivity != null) {
+            retainedFluidCloudItem = activeLiveActivity
+        }
+        AnimatedVisibility(
+            visible = isFluidCloudVisible && retainedFluidCloudItem != null,
+            enter = fadeIn(
+                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing),
+            ) + expandVertically(
+                animationSpec = FlowMotion.standardSpring(),
+                expandFrom = Alignment.Top,
+            ) + scaleIn(
+                initialScale = 0.96f,
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            ),
+            exit = fadeOut(
+                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+            ) + shrinkVertically(
+                animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+                shrinkTowards = Alignment.Top,
+            ) + scaleOut(
+                targetScale = 0.96f,
+                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+            ),
+            label = "timetable_fluid_cloud_visibility",
+        ) {
+            retainedFluidCloudItem?.let { liveItem ->
+                FluidCloudCapsuleBanner(
+                    item = liveItem,
+                    permissionStatus = permissionStatus,
+                    nowMillis = liveNowMillis,
+                    onOpenPermissions = onOpenPermissions,
+                )
+            }
         }
 
         // 3. Optional Custom Extra Time Slot Bar (e.g. Morning Exercise, shown in Week View)

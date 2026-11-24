@@ -16,8 +16,8 @@ android {
     applicationId = "com.xialia.rippleplan"
     minSdk = 24
     targetSdk = 36
-    versionCode = 25
-    versionName = "2.2.3"
+    versionCode = 27
+    versionName = "2.2.5"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

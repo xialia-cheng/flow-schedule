@@ -2004,6 +2004,80 @@ class ExampleRobolectricTest {
         assertNotNull(resurrectAlarm)
         assertTrue(resurrectAlarm!!.triggerAtMs in (before + 1_400L)..(after + 2_000L))
     }
+
+    @Test
+    fun `live update manager reposts on targetMillis change or missing system notification and guard computes phase boundaries`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val appContext = ApplicationProvider.getApplicationContext<android.app.Application>()
+        org.robolectric.Shadows.shadowOf(appContext).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+
+        val manager = com.example.notification.LiveUpdateManager(context)
+        manager.ensureNotificationChannel()
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val shadowNm = org.robolectric.Shadows.shadowOf(nm)
+
+        val now = System.currentTimeMillis()
+        val start = now + 20_000L
+        val end = now + 80_000L
+        val baseItem = LiveActivityItem(
+            sourceType = LiveActivitySourceType.COURSE,
+            sourceId = 88L,
+            dateKey = "2026-11-24",
+            title = "计算机网络",
+            startTimeMillis = start,
+            endTimeMillis = end,
+            reminderMinutesBefore = 1,
+            showLockscreenDetails = false,
+        )
+
+        // 1. Initial prep notification uses redacted prep title and start targetMillis
+        manager.syncLiveActivity(listOf(baseItem), nowMillis = now + 2_000L, forceAlert = true)
+        val initialNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+        assertNotNull(initialNotif)
+        assertEquals(
+            "课程即将开始",
+            initialNotif.publicVersion?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
+        )
+
+        // 2. If system notification was cleared (e.g. task swipe) while signature matches, syncLiveActivity re-posts even with forceAlert = false
+        nm.cancel(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+        assertNull(shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID))
+        manager.syncLiveActivity(listOf(baseItem), nowMillis = now + 2_000L, forceAlert = false)
+        assertNotNull(shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID))
+
+        // 3. Changing targetMillis (e.g. snoozed +10m) updates Chronometer target with non-silent flags
+        val extendedEnd = end + 10 * 60_000L
+        val activeTime = start + 1_000L
+        manager.syncLiveActivity(listOf(baseItem), nowMillis = activeTime, forceAlert = false)
+        val activeNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+        assertEquals(
+            "课程进行中",
+            activeNotif.publicVersion?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
+        )
+        manager.syncLiveActivity(
+            listOf(baseItem.copy(endTimeMillis = extendedEnd)),
+            nowMillis = activeTime,
+            forceAlert = false,
+        )
+        val updatedTargetNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+        assertEquals(extendedEnd, updatedTargetNotif.`when`)
+        assertEquals(0, updatedTargetNotif.flags and android.app.Notification.FLAG_ONLY_ALERT_ONCE)
+
+        // 4. Guard service boundary helper chooses earliest upcoming start/end boundary
+        val nextFromPrep = com.example.notification.ScheduleGuardService.nextLivePhaseBoundary(
+            activeItem = baseItem,
+            candidateBoundaries = listOf(now + 180_000L),
+            nowMillis = now + 2_000L,
+        )
+        assertEquals(start, nextFromPrep)
+
+        val nextFromActive = com.example.notification.ScheduleGuardService.nextLivePhaseBoundary(
+            activeItem = baseItem,
+            candidateBoundaries = emptyList(),
+            nowMillis = start + 500L,
+        )
+        assertEquals(end, nextFromActive)
+    }
 }
 
 

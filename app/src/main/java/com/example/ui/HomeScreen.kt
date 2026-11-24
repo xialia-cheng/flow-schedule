@@ -913,23 +913,46 @@ private fun SectionTitleRow(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    var retainedHint by remember { mutableStateOf(trailingHint) }
+    if (trailingHint != null) {
+        retainedHint = trailingHint
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = colorScheme.onSurfaceVariant,
-        )
-        if (trailingHint != null) {
+        AnimatedContent(
+            targetState = title,
+            modifier = Modifier.weight(1f, fill = false),
+            transitionSpec = {
+                fadeIn(tween(durationMillis = 260, easing = FastOutSlowInEasing)) togetherWith
+                    fadeOut(tween(durationMillis = 180, easing = FastOutSlowInEasing))
+            },
+            label = "home_hero_section_title",
+        ) { targetTitle ->
             Text(
-                text = trailingHint,
-                style = MaterialTheme.typography.labelSmall,
-                color = flowColors.liveAccent,
+                text = targetTitle,
+                style = MaterialTheme.typography.titleSmall,
+                color = colorScheme.onSurfaceVariant,
             )
+        }
+        AnimatedVisibility(
+            visible = trailingHint != null && retainedHint != null,
+            enter = fadeIn(tween(durationMillis = 280, easing = FastOutSlowInEasing)) +
+                scaleIn(initialScale = 0.94f, animationSpec = tween(durationMillis = 260)),
+            exit = fadeOut(tween(durationMillis = 200, easing = FastOutSlowInEasing)) +
+                scaleOut(targetScale = 0.94f, animationSpec = tween(durationMillis = 180)),
+            label = "home_hero_live_hint",
+        ) {
+            retainedHint?.let { hint ->
+                Text(
+                    text = hint,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = flowColors.liveAccent,
+                )
+            }
         }
     }
 }

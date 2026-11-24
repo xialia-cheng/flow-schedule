@@ -53,6 +53,7 @@ class LiveUpdateManager(private val context: Context) {
     private var currentlyPostedSourceId: Long? = null
     private var currentlyPostedSignature: String? = null
     private var currentlyPostedIsInProgress: Boolean? = null
+    private var currentlyPostedTargetMillis: Long? = null
     private var lastPromotableCharacteristics: Boolean? = null
 
     private var activeFocusItem: LiveActivityItem? = null
@@ -192,6 +193,14 @@ class LiveUpdateManager(private val context: Context) {
         val channel = runCatching { notificationManager.getNotificationChannel(CHANNEL_ID) }.getOrNull()
             ?: return true
         return channel.importance > NotificationManager.IMPORTANCE_MIN
+    }
+
+    private fun hasActiveLiveNotification(): Boolean {
+        return runCatching {
+            notificationManager.activeNotifications.any { sbn ->
+                sbn.id == LIVE_UPDATE_NOTIFICATION_ID
+            }
+        }.getOrDefault(true)
     }
 
     private fun querySystemPromotedOngoingFlag(): Boolean {
@@ -408,16 +417,31 @@ class LiveUpdateManager(private val context: Context) {
         val displayMetaKey = "${activeItem.showLocation}:${activeItem.showTeacher}:${activeItem.showNotes}:${activeItem.showLockscreenDetails}:${activeItem.title}:${activeItem.isBreakPhase}"
         val postSignature = "${activeItem.uniqueKey}|$isInProgress|$targetMillis|$dndActive|$progressBucket|$colorKey|$displayMetaKey"
 
-        // Avoid redundant notify() calls that would interrupt SystemUI's native Chronometer ticker
-        if (!forceAlert && postSignature == currentlyPostedSignature) {
-            return activeItem
-        }
-
         val isSameItem = currentlyPostedKey == activeItem.uniqueKey
         val phaseChanged = isSameItem &&
             currentlyPostedIsInProgress != null &&
             currentlyPostedIsInProgress != isInProgress
-        val silentUpdate = isSameItem && !forceAlert && !phaseChanged
+        val targetChanged = isSameItem &&
+            currentlyPostedTargetMillis != null &&
+            currentlyPostedTargetMillis != targetMillis
+        val isCurrentlyActiveInSystem = hasActiveLiveNotification()
+
+        // Avoid redundant notify() calls that would interrupt SystemUI's native Chronometer ticker,
+        // but ALWAYS re-post when phase (prep -> active), targetMillis, or system presence changes.
+        if (!forceAlert &&
+            !phaseChanged &&
+            !targetChanged &&
+            isCurrentlyActiveInSystem &&
+            postSignature == currentlyPostedSignature
+        ) {
+            return activeItem
+        }
+
+        val silentUpdate = isSameItem &&
+            !forceAlert &&
+            !phaseChanged &&
+            !targetChanged &&
+            isCurrentlyActiveInSystem
 
         val notification = buildLiveActivityNotification(activeItem, nowMillis, silentUpdate)
 
@@ -431,6 +455,7 @@ class LiveUpdateManager(private val context: Context) {
         currentlyPostedSourceId = activeItem.sourceId
         currentlyPostedSignature = postSignature
         currentlyPostedIsInProgress = isInProgress
+        currentlyPostedTargetMillis = targetMillis
         lastPostedEndTimeMillis = activeItem.endTimeMillis
 
         @SuppressLint("MissingPermission")
@@ -462,6 +487,7 @@ class LiveUpdateManager(private val context: Context) {
         currentlyPostedSourceId = null
         currentlyPostedSignature = null
         currentlyPostedIsInProgress = null
+        currentlyPostedTargetMillis = null
         lastPostedEndTimeMillis = 0L
         _activeLiveActivity.value = null
         restoreDndIfEnabledByApp()
@@ -588,6 +614,7 @@ class LiveUpdateManager(private val context: Context) {
                     setPublicVersion(
                         buildRedactedPublicNotification(
                             item = item,
+                            isInProgress = isInProgress,
                             targetMillis = targetMillis,
                             remainingEndMillis = remainingEndMillis,
                             themeAccentColor = themeAccentColor,
@@ -681,6 +708,7 @@ class LiveUpdateManager(private val context: Context) {
                     setPublicVersion(
                         buildRedactedPublicNotification(
                             item = item,
+                            isInProgress = isInProgress,
                             targetMillis = targetMillis,
                             remainingEndMillis = remainingEndMillis,
                             themeAccentColor = themeAccentColor,
@@ -708,6 +736,7 @@ class LiveUpdateManager(private val context: Context) {
 
     private fun buildRedactedPublicNotification(
         item: LiveActivityItem,
+        isInProgress: Boolean,
         targetMillis: Long,
         remainingEndMillis: Long,
         themeAccentColor: Int,
@@ -716,8 +745,10 @@ class LiveUpdateManager(private val context: Context) {
         val safeTitle = when {
             item.sourceType == LiveActivitySourceType.FOCUS && item.isBreakPhase -> "专注休息进行中"
             item.sourceType == LiveActivitySourceType.FOCUS -> "专注学习进行中"
-            item.sourceType == LiveActivitySourceType.COURSE -> "课程安排进行中"
-            else -> "日程安排进行中"
+            item.sourceType == LiveActivitySourceType.COURSE && isInProgress -> "课程进行中"
+            item.sourceType == LiveActivitySourceType.COURSE -> "课程即将开始"
+            isInProgress -> "日程进行中"
+            else -> "日程即将开始"
         }
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(smallIconRes)

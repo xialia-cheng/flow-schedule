@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -7,6 +10,15 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +49,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,82 +86,160 @@ fun HeroLiveCard(
     onEdit: (ScheduleEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var retainedSchedule by remember { mutableStateOf(schedule) }
+    if (schedule != null) {
+        retainedSchedule = schedule
+    }
+
+    AnimatedContent(
+        targetState = schedule != null,
+        modifier = modifier,
+        transitionSpec = {
+            val enter = fadeIn(
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            ) + expandVertically(
+                animationSpec = FlowMotion.standardSpring(),
+                expandFrom = Alignment.Top,
+            ) + scaleIn(
+                initialScale = 0.97f,
+                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+            )
+            val exit = fadeOut(
+                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+            ) + shrinkVertically(
+                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                shrinkTowards = Alignment.Top,
+            ) + scaleOut(
+                targetScale = 0.97f,
+                animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+            )
+            (enter togetherWith exit).using(SizeTransform(clip = false))
+        },
+        label = "hero_card_presence_transition",
+    ) { hasSchedule ->
+        val activeItem = if (hasSchedule) (schedule ?: retainedSchedule) else null
+        if (activeItem == null) {
+            HeroIdleCard()
+        } else {
+            HeroActiveCard(
+                schedule = activeItem,
+                nowMillis = nowMillis,
+                isLiveActive = isLiveActive,
+                customTags = customTags,
+                onComplete = onComplete,
+                onSnooze10Min = onSnooze10Min,
+                onEdit = onEdit,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeroIdleCard(modifier: Modifier = Modifier) {
+    val flowColors = FlowTheme.colors
+    val colorScheme = MaterialTheme.colorScheme
+    val cardShape = MaterialTheme.shapes.large
+
+    val idleModifier = if (!flowColors.isDark) {
+        modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 4.dp,
+                shape = cardShape,
+                ambientColor = flowColors.cardShadowColor,
+                spotColor = flowColors.cardShadowColor,
+            )
+    } else {
+        modifier.fillMaxWidth()
+    }
+
+    Surface(
+        modifier = idleModifier.testTag("hero_idle_card"),
+        shape = cardShape,
+        color = flowColors.cardElevated,
+        border = BorderStroke(1.dp, colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(colorScheme.surfaceContainerHigh),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Schedule,
+                    contentDescription = null,
+                    tint = colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "当前暂无进行中或临近日程",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colorScheme.onSurface,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "日程进入提前提醒窗口或开始时，将自动激活状态栏实况胶囊或实时进度通知",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroActiveCard(
+    schedule: ScheduleEntity,
+    nowMillis: Long,
+    isLiveActive: Boolean,
+    customTags: List<CustomScheduleTag>,
+    onComplete: (ScheduleEntity) -> Unit,
+    onSnooze10Min: (ScheduleEntity) -> Unit,
+    onEdit: (ScheduleEntity) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val flowColors = FlowTheme.colors
     val colorScheme = MaterialTheme.colorScheme
     val haptics = rememberAppHaptics()
     val cardShape = MaterialTheme.shapes.large
 
-    if (schedule == null) {
-        val idleModifier = if (!flowColors.isDark) {
-            modifier
-                .fillMaxWidth()
-                .shadow(
-                    elevation = 4.dp,
-                    shape = cardShape,
-                    ambientColor = flowColors.cardShadowColor,
-                    spotColor = flowColors.cardShadowColor,
-                )
-        } else {
-            modifier.fillMaxWidth()
-        }
-
-        Surface(
-            modifier = idleModifier.testTag("hero_idle_card"),
-            shape = cardShape,
-            color = flowColors.cardElevated,
-            border = BorderStroke(1.dp, colorScheme.outlineVariant),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(colorScheme.surfaceContainerHigh),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Schedule,
-                        contentDescription = null,
-                        tint = colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "当前暂无进行中或临近日程",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = colorScheme.onSurface,
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "日程进入提前提醒窗口或开始时，将自动激活状态栏实况胶囊或实时进度通知",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-        return
-    }
-
     val isInProgress = schedule.isInProgress(nowMillis)
     val isInReminder = schedule.isInReminderWindow(nowMillis)
-    val accentColor = when {
+    val targetAccentColor = when {
         isInProgress -> flowColors.liveAccent
         isInReminder -> flowColors.upcomingAccent
         else -> flowColors.secondaryAccent
     }
-    val capsuleAccentColor = when {
-        isInProgress -> flowColors.liveAccent
-        isInReminder -> flowColors.upcomingAccent
-        else -> flowColors.secondaryAccent
-    }
+    val accentColor by animateColorAsState(
+        targetValue = targetAccentColor,
+        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
+        label = "hero_accent_color",
+    )
+    val secondaryGradientColor by animateColorAsState(
+        targetValue = if (isInProgress) flowColors.secondaryAccent else targetAccentColor.copy(alpha = 0.72f),
+        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
+        label = "hero_secondary_gradient_color",
+    )
+    val borderAlpha by animateFloatAsState(
+        targetValue = if (isLiveActive) 0.55f else 0.28f,
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        label = "hero_border_alpha",
+    )
+    val glowAlpha by animateFloatAsState(
+        targetValue = if (isLiveActive) 0.14f else 0.06f,
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        label = "hero_glow_alpha",
+    )
 
     val targetMillis = if (isInProgress) schedule.endTimeMillis else schedule.startTimeMillis
     val remainingMillis = (targetMillis - nowMillis).coerceAtLeast(0L)
@@ -205,7 +298,7 @@ fun HeroLiveCard(
             width = 1.dp,
             brush = Brush.linearGradient(
                 colors = listOf(
-                    accentColor.copy(alpha = if (isLiveActive) 0.55f else 0.28f),
+                    accentColor.copy(alpha = borderAlpha),
                     colorScheme.outlineVariant,
                 ),
             ),
@@ -218,7 +311,7 @@ fun HeroLiveCard(
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                accentColor.copy(alpha = if (isLiveActive) 0.13f else 0.06f),
+                                accentColor.copy(alpha = glowAlpha),
                                 Color.Transparent,
                             ),
                             center = Offset(size.width * 0.85f, size.height * 0.15f),
@@ -239,7 +332,7 @@ fun HeroLiveCard(
                 Surface(
                     shape = CircleShape,
                     color = flowColors.fluidCapsuleBg,
-                    border = BorderStroke(1.dp, capsuleAccentColor.copy(alpha = 0.45f)),
+                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.48f)),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -251,14 +344,28 @@ fun HeroLiveCard(
                                 .size(8.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (isLiveActive) capsuleAccentColor.copy(alpha = pulseAlpha) else capsuleAccentColor,
+                                    if (isLiveActive) accentColor.copy(alpha = pulseAlpha) else accentColor,
                                 ),
                         )
-                        Text(
-                            text = statusPillText,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = capsuleAccentColor,
-                        )
+                        AnimatedContent(
+                            targetState = statusPillText,
+                            transitionSpec = {
+                                (fadeIn(tween(260, easing = FastOutSlowInEasing)) +
+                                    slideInVertically(tween(240)) { it / 3 }) togetherWith
+                                    (fadeOut(tween(180, easing = FastOutSlowInEasing)) +
+                                        slideOutVertically(tween(180)) { -it / 3 }) using
+                                    SizeTransform(clip = false)
+                            },
+                            label = "hero_status_pill_text",
+                        ) { targetPill ->
+                            Text(
+                                text = targetPill,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = accentColor,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
                     }
                 }
 
@@ -266,11 +373,19 @@ fun HeroLiveCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text(
-                        text = countdownPrefix,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colorScheme.onSurfaceVariant,
-                    )
+                    AnimatedContent(
+                        targetState = countdownPrefix,
+                        transitionSpec = {
+                            fadeIn(tween(220)) togetherWith fadeOut(tween(160))
+                        },
+                        label = "hero_countdown_prefix",
+                    ) { targetPrefix ->
+                        Text(
+                            text = targetPrefix,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Text(
                         text = countdownDigital,
                         fontFamily = MonoFontFamily,
@@ -284,13 +399,22 @@ fun HeroLiveCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = schedule.title,
-                style = MaterialTheme.typography.headlineSmall,
-                color = colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            AnimatedContent(
+                targetState = schedule.id to schedule.title,
+                transitionSpec = {
+                    fadeIn(tween(260, easing = FastOutSlowInEasing)) togetherWith
+                        fadeOut(tween(180, easing = FastOutSlowInEasing))
+                },
+                label = "hero_schedule_title",
+            ) { (_, titleText) ->
+                Text(
+                    text = titleText,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
 
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -380,7 +504,7 @@ fun HeroLiveCard(
                             .background(
                                 Brush.horizontalGradient(
                                     colors = listOf(
-                                        flowColors.secondaryAccent,
+                                        secondaryGradientColor,
                                         accentColor,
                                     ),
                                 ),

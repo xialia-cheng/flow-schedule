@@ -1,9 +1,14 @@
 package com.example.ui.timetable
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -494,6 +499,11 @@ private fun DayCourseTimelineCard(
     }
 
     val shape = RoundedCornerShape(20.dp)
+    val animatedBorderColor by animateColorAsState(
+        targetValue = accentColor.copy(alpha = if (isOngoing) 0.85f else 0.35f),
+        animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing),
+        label = "day_course_border",
+    )
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -516,7 +526,7 @@ private fun DayCourseTimelineCard(
         color = cardBg,
         border = BorderStroke(
             width = if (isOngoing) 1.5.dp else 1.dp,
-            color = accentColor.copy(alpha = if (isOngoing) 0.85f else 0.35f),
+            color = animatedBorderColor,
         ),
     ) {
         Row(
@@ -596,7 +606,12 @@ private fun DayCourseTimelineCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    if (isOngoing) {
+                    AnimatedVisibility(
+                        visible = isOngoing,
+                        enter = fadeIn(tween(240)) + scaleIn(initialScale = 0.88f, animationSpec = tween(240)),
+                        exit = fadeOut(tween(180)) + scaleOut(targetScale = 0.88f, animationSpec = tween(180)),
+                        label = "day_course_ongoing_badge",
+                    ) {
                         Surface(
                             shape = CircleShape,
                             color = flowColors.liveAccent,
@@ -609,7 +624,8 @@ private fun DayCourseTimelineCard(
                                 modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
                             )
                         }
-                    } else if (!isCurrentWeek) {
+                    }
+                    if (!isOngoing && !isCurrentWeek) {
                         Surface(
                             shape = CircleShape,
                             color = colorScheme.surfaceContainerHighest,

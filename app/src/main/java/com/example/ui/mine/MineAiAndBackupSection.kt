@@ -1,5 +1,17 @@
 package com.example.ui.mine
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -426,6 +438,34 @@ private fun FluidCloudTestCard(
     val haptics = rememberAppHaptics()
     val shape = MaterialTheme.shapes.medium
 
+    val borderStart by animateColorAsState(
+        targetValue = if (hasActiveTest) {
+            flowColors.liveAccent.copy(alpha = 0.72f)
+        } else {
+            flowColors.secondaryAccent.copy(alpha = 0.50f)
+        },
+        animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing),
+        label = "fluid_test_border_start",
+    )
+    val borderEnd by animateColorAsState(
+        targetValue = if (hasActiveTest) {
+            colorScheme.primary.copy(alpha = 0.75f)
+        } else {
+            flowColors.liveAccent.copy(alpha = 0.50f)
+        },
+        animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing),
+        label = "fluid_test_border_end",
+    )
+    val containerColor by animateColorAsState(
+        targetValue = if (hasActiveTest) {
+            colorScheme.primaryContainer.copy(alpha = if (flowColors.isDark) 0.24f else 0.18f)
+        } else {
+            colorScheme.surfaceContainerLow
+        },
+        animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing),
+        label = "fluid_test_container",
+    )
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -436,14 +476,11 @@ private fun FluidCloudTestCard(
             }
             .testTag("mine_test_fluid_cloud_button"),
         shape = shape,
-        color = colorScheme.surfaceContainerLow,
+        color = containerColor,
         border = BorderStroke(
             width = 1.dp,
             brush = Brush.horizontalGradient(
-                colors = listOf(
-                    flowColors.secondaryAccent.copy(alpha = 0.55f),
-                    flowColors.liveAccent.copy(alpha = 0.55f),
-                ),
+                colors = listOf(borderStart, borderEnd),
             ),
         ),
     ) {
@@ -479,17 +516,31 @@ private fun FluidCloudTestCard(
                         fontWeight = FontWeight.Bold,
                         color = colorScheme.onSurface,
                     )
-                    Text(
-                        text = if (hasActiveTest) {
-                            "1 分钟测试正在实况通知中倒计时，可随时停止或重发"
-                        } else {
-                            "实况通知调试与效果演练（含 @地点、分段进度条与快捷操作）"
+                    AnimatedContent(
+                        targetState = hasActiveTest,
+                        transitionSpec = {
+                            fadeIn(tween(240, easing = FastOutSlowInEasing)) togetherWith
+                                fadeOut(tween(160, easing = FastOutSlowInEasing))
                         },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant,
-                    )
+                        label = "fluid_test_subtitle",
+                    ) { active ->
+                        Text(
+                            text = if (active) {
+                                "1 分钟测试正在实况通知中倒计时，可随时停止或重发"
+                            } else {
+                                "实况通知调试与效果演练（含 @地点、分段进度条与快捷操作）"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-                if (!hasActiveTest) {
+                AnimatedVisibility(
+                    visible = !hasActiveTest,
+                    enter = fadeIn(tween(220)) + scaleIn(initialScale = 0.85f, animationSpec = tween(220)),
+                    exit = fadeOut(tween(160)) + scaleOut(targetScale = 0.85f, animationSpec = tween(160)),
+                    label = "fluid_test_play_badge",
+                ) {
                     Box(
                         modifier = Modifier
                             .size(32.dp)
@@ -507,7 +558,20 @@ private fun FluidCloudTestCard(
                 }
             }
 
-            if (hasActiveTest) {
+            AnimatedVisibility(
+                visible = hasActiveTest,
+                enter = fadeIn(tween(260, easing = FastOutSlowInEasing)) +
+                    expandVertically(
+                        animationSpec = tween(260, easing = FastOutSlowInEasing),
+                        expandFrom = Alignment.Top,
+                    ),
+                exit = fadeOut(tween(180, easing = FastOutSlowInEasing)) +
+                    shrinkVertically(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        shrinkTowards = Alignment.Top,
+                    ),
+                label = "fluid_test_actions_visibility",
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
