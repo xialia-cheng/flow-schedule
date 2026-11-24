@@ -5,6 +5,10 @@
     <string name="widget_description">实时展示今天下一节课程或待办日程的名称、地点与剩余时间</string>
     <string name="channel_live_updates_name">日程实况通知</string>
     <string name="channel_live_updates_desc">在日程临近或进行中时，于状态栏实况胶囊或实时进度通知中展示倒计时</string>
+    <string name="channel_guard_service_name">后台常驻守护</string>
+    <string name="channel_guard_service_desc">低打扰静音常驻通知，用于保持课表与日程实时提醒及跨天准时调度</string>
+    <string name="guard_notification_title">微澜日程守护中</string>
+    <string name="guard_notification_idle">今日课表与日程提醒已就绪</string>
 
     <string name="today_todo_title">今日待办</string>
     <string name="active_live_section_title">实况通知实时状态</string>

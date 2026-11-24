@@ -6,12 +6,39 @@ import android.content.Intent
 import com.example.ScheduleApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class ScheduleAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != ACTION_SCHEDULE_TRIGGER) return
+        val action = intent.action ?: return
+        if (action == ACTION_GUARD_RESTART) {
+            val pendingResult = goAsync()
+            val app = context.applicationContext as ScheduleApp
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val guardEnabled = runCatching {
+                        app.container.preferencesRepository.settings.first().backgroundGuardEnabled
+                    }.getOrDefault(false)
+                    if (guardEnabled) {
+                        app.container.liveUpdateCoordinator.syncAll(
+                            nowMillis = System.currentTimeMillis(),
+                            forceAlert = false,
+                            rescheduleAlarms = true,
+                        )
+                        if (!ScheduleGuardService.isRunning) {
+                            ScheduleGuardService.tryStart(context)
+                        }
+                    }
+                } finally {
+                    pendingResult.finish()
+                }
+            }
+            return
+        }
+
+        if (action != ACTION_SCHEDULE_TRIGGER) return
 
         val phase = intent.getIntExtra(
             ScheduleAlarmScheduler.EXTRA_ALARM_PHASE,
@@ -67,5 +94,6 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_SCHEDULE_TRIGGER = "com.example.action.SCHEDULE_ALARM_TRIGGER"
+        const val ACTION_GUARD_RESTART = "com.example.action.GUARD_RESTART"
     }
 }

@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.AppThemeMode
 import com.example.notification.LiveActivitySourceType
 import com.example.notification.LiveUpdateManager
+import com.example.notification.ScheduleGuardService
 import com.example.ui.AppRootScreen
 import com.example.ui.ScheduleViewModel
 import com.example.ui.navigation.AppDestination
@@ -140,6 +141,9 @@ class MainActivity : ComponentActivity() {
                     val observer = LifecycleEventObserver { _, event ->
                         if (event == Lifecycle.Event.ON_RESUME) {
                             scheduleViewModel.onResumeRefresh()
+                            if (timetableViewModel.uiState.value.settings.backgroundGuardEnabled && !ScheduleGuardService.isRunning) {
+                                ScheduleGuardService.tryStart(context)
+                            }
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)

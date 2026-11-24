@@ -8,11 +8,14 @@ import com.example.data.UserPreferencesRepository
 import com.example.notification.LiveUpdateCoordinator
 import com.example.notification.LiveUpdateManager
 import com.example.notification.ScheduleAlarmScheduler
+import com.example.notification.ScheduleGuardService
+import com.example.notification.ScheduleGuardWorkScheduler
 import com.example.smart.SmartCaptureOrchestrator
 import com.example.widget.FlowWidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class AppContainer(application: Application) {
@@ -63,6 +66,7 @@ class ScheduleApp : Application() {
         super.onCreate()
         container = AppContainer(this)
         container.liveUpdateManager.ensureNotificationChannel()
+        ScheduleGuardService.ensureNotificationChannel(this)
         // Arm upcoming course & schedule Live Activity alarms immediately on cold start
         appScope.launch {
             runCatching {
@@ -71,6 +75,13 @@ class ScheduleApp : Application() {
                     forceAlert = false,
                     rescheduleAlarms = true,
                 )
+                val guardEnabled = container.preferencesRepository.settings.first().backgroundGuardEnabled
+                if (guardEnabled) {
+                    ScheduleGuardWorkScheduler.schedulePeriodicGuard(this@ScheduleApp)
+                    ScheduleGuardService.tryStart(this@ScheduleApp)
+                } else {
+                    ScheduleGuardWorkScheduler.cancelPeriodicGuard(this@ScheduleApp)
+                }
             }
         }
     }

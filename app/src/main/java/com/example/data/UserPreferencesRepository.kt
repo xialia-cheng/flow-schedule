@@ -105,6 +105,7 @@ data class AppSettings(
     val autoCheckUpdates: Boolean = true,
     val lastUpdateCheckMillis: Long = 0L,
     val hapticFeedbackEnabled: Boolean = true,
+    val backgroundGuardEnabled: Boolean = false,
     val customAiConfig: CustomAiConfig = CustomAiConfig(),
 )
 
@@ -150,6 +151,7 @@ class UserPreferencesRepository(private val context: Context) {
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val LAST_UPDATE_CHECK_MILLIS = longPreferencesKey("last_update_check_millis")
         val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
+        val BACKGROUND_GUARD_ENABLED = booleanPreferencesKey("background_guard_enabled")
 
         // Optional custom OpenAI-compatible AI config (API key encrypted via Android Keystore)
         val CUSTOM_AI_ENABLED = booleanPreferencesKey("custom_ai_enabled")
@@ -216,6 +218,7 @@ class UserPreferencesRepository(private val context: Context) {
             autoCheckUpdates = prefs[Keys.AUTO_CHECK_UPDATES] ?: true,
             lastUpdateCheckMillis = prefs[Keys.LAST_UPDATE_CHECK_MILLIS] ?: 0L,
             hapticFeedbackEnabled = prefs[Keys.HAPTIC_FEEDBACK_ENABLED] ?: true,
+            backgroundGuardEnabled = prefs[Keys.BACKGROUND_GUARD_ENABLED] ?: false,
             customAiConfig = CustomAiConfig(
                 enabled = prefs[Keys.CUSTOM_AI_ENABLED] ?: false,
                 baseUrl = prefs[Keys.CUSTOM_AI_BASE_URL].orEmpty(),
@@ -446,6 +449,12 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setHapticFeedbackEnabled(enabled: Boolean) {
         context.userPreferencesDataStore.edit { prefs ->
             prefs[Keys.HAPTIC_FEEDBACK_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setBackgroundGuardEnabled(enabled: Boolean) {
+        context.userPreferencesDataStore.edit { prefs ->
+            prefs[Keys.BACKGROUND_GUARD_ENABLED] = enabled
         }
     }
 }

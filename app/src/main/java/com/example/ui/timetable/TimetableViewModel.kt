@@ -1,5 +1,6 @@
 package com.example.ui.timetable
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -19,6 +20,8 @@ import com.example.data.UserPreferencesRepository
 import com.example.data.WeekStartDay
 import com.example.data.WeekType
 import com.example.notification.LiveUpdateCoordinator
+import com.example.notification.ScheduleGuardService
+import com.example.notification.ScheduleGuardWorkScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -543,6 +546,28 @@ class TimetableViewModel(
     fun setHapticFeedbackEnabled(enabled: Boolean) {
         viewModelScope.launch {
             preferencesRepository.setHapticFeedbackEnabled(enabled)
+        }
+    }
+
+    fun setBackgroundGuardEnabled(enabled: Boolean, context: Context) {
+        val appContext = context.applicationContext
+        viewModelScope.launch {
+            preferencesRepository.setBackgroundGuardEnabled(enabled)
+            if (enabled) {
+                ScheduleGuardWorkScheduler.schedulePeriodicGuard(appContext)
+                val started = ScheduleGuardService.tryStart(appContext)
+                emitMessage(
+                    if (started) {
+                        "已开启全天后台常驻守护，将持续同步提醒"
+                    } else {
+                        "已开启 15 分钟后台巡检守护，请在系统设置中允许通知与后台运行"
+                    },
+                )
+            } else {
+                ScheduleGuardService.stop(appContext)
+                ScheduleGuardWorkScheduler.cancelPeriodicGuard(appContext)
+                emitMessage("已关闭全天后台常驻守护")
+            }
         }
     }
 

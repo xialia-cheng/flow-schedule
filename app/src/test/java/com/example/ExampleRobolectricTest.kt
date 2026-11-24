@@ -1351,6 +1351,77 @@ class ExampleRobolectricTest {
         disabledHaptics.confirm()
         assertTrue(disabledEvents.isEmpty())
     }
+
+    @Test
+    fun `schedule guard service isolates channel and notification id and formats concise status`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val defaults = com.example.data.AppSettings()
+        assertFalse(defaults.backgroundGuardEnabled)
+
+        assertFalse(
+            com.example.notification.ScheduleGuardService.CHANNEL_ID ==
+                com.example.notification.LiveUpdateManager.CHANNEL_ID,
+        )
+        assertFalse(
+            com.example.notification.ScheduleGuardService.GUARD_NOTIFICATION_ID ==
+                com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID,
+        )
+
+        com.example.notification.ScheduleGuardService.ensureNotificationChannel(context)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val guardChannel = nm.getNotificationChannel(com.example.notification.ScheduleGuardService.CHANNEL_ID)
+        assertNotNull(guardChannel)
+        assertEquals(android.app.NotificationManager.IMPORTANCE_LOW, guardChannel.importance)
+
+        val cal = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 24, 14, 30, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val upcomingText = com.example.notification.ScheduleGuardService.formatGuardStatusText(
+            nextTitle = "高等数学",
+            targetTimeMillis = cal.timeInMillis,
+            isInProgress = false,
+            idleText = "今日课表与日程提醒已就绪",
+        )
+        assertEquals("下一项：高等数学 14:30", upcomingText)
+
+        val activeText = com.example.notification.ScheduleGuardService.formatGuardStatusText(
+            nextTitle = "算法设计",
+            targetTimeMillis = cal.timeInMillis,
+            isInProgress = true,
+            idleText = "今日课表与日程提醒已就绪",
+        )
+        assertEquals("进行中：算法设计（14:30 结束）", activeText)
+
+        val idleText = com.example.notification.ScheduleGuardService.formatGuardStatusText(
+            nextTitle = null,
+            targetTimeMillis = null,
+            isInProgress = false,
+            idleText = "今日课表与日程提醒已就绪",
+        )
+        assertEquals("今日课表与日程提醒已就绪", idleText)
+
+        val notification = com.example.notification.ScheduleGuardService.buildGuardNotification(
+            context = context,
+            statusText = upcomingText,
+        )
+        assertTrue((notification.flags and android.app.Notification.FLAG_ONGOING_EVENT) != 0)
+        assertTrue((notification.flags and android.app.Notification.FLAG_ONLY_ALERT_ONCE) != 0)
+        assertEquals(
+            com.example.notification.ScheduleGuardService.CHANNEL_ID,
+            notification.channelId,
+        )
+    }
+
+    @Test
+    fun `schedule guard worker executes cleanly via WorkManager TestListenableWorkerBuilder`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val worker = androidx.work.testing.TestListenableWorkerBuilder<com.example.notification.ScheduleGuardWorker>(
+            context = context,
+        ).build()
+        val result = kotlinx.coroutines.runBlocking { worker.doWork() }
+        assertEquals(androidx.work.ListenableWorker.Result.success(), result)
+    }
 }
 
 

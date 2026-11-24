@@ -19,12 +19,13 @@
 # Jetpack Glance AppWidget & Receivers
 -keep class com.example.widget.** { *; }
 -keep class * extends androidx.glance.appwidget.GlanceAppWidgetReceiver { *; }
--keep class * extends androidx.glance.appwidget.action.ActionCallback { *; }
+-keep class * implements androidx.glance.appwidget.action.ActionCallback { public <init>(); }
 
-# Manifest components & notification receivers
+# Manifest components, notification receivers, foreground guard service & WorkManager workers
 -keep class com.example.ScheduleApp { *; }
 -keep class com.example.MainActivity { *; }
 -keep class com.example.notification.** { *; }
+-keep class * extends androidx.work.CoroutineWorker { public <init>(android.content.Context, androidx.work.WorkerParameters); }
 
 # Keep source file and line numbers for readable crash diagnostics
 -keepattributes SourceFile,LineNumberTable

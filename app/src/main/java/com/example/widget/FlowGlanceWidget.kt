@@ -3,15 +3,18 @@ package com.example.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
@@ -36,10 +39,18 @@ import com.example.MainActivity
 import com.example.data.CourseColorPalette
 import com.example.data.DateTimeUtils
 import com.example.data.ScheduleDatabase
+import com.example.data.UserPreferencesRepository
 import com.example.notification.LiveActivitySourceType
 import com.example.notification.LiveUpdateManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+
+data class WidgetSecondaryItem(
+    val title: String,
+    val startClock: String,
+    val location: String,
+)
 
 data class WidgetNextItem(
     val sourceType: LiveActivitySourceType,
@@ -49,9 +60,15 @@ data class WidgetNextItem(
     val statusBadge: String,
     val remainingText: String,
     val isInProgress: Boolean,
+    val totalRemainingToday: Int = 1,
+    val upcomingItems: List<WidgetSecondaryItem> = emptyList(),
 )
 
 class FlowGlanceWidget : GlanceAppWidget() {
+
+    override val sizeMode: SizeMode = SizeMode.Responsive(
+        setOf(COMPACT_SIZE, EXPANDED_SIZE),
+    )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val nowMillis = System.currentTimeMillis()
@@ -62,9 +79,12 @@ class FlowGlanceWidget : GlanceAppWidget() {
 
         provideContent {
             GlanceTheme {
+                val size = LocalSize.current
+                val showUpcomingList = size.height >= EXPANDED_SIZE.height
                 FlowWidgetContent(
                     item = nextItem,
                     dateHeader = dateHeader,
+                    showUpcomingList = showUpcomingList,
                     context = context,
                 )
             }
@@ -73,6 +93,9 @@ class FlowGlanceWidget : GlanceAppWidget() {
 
     private suspend fun loadTodayNextItem(context: Context, nowMillis: Long): WidgetNextItem? {
         val db = ScheduleDatabase.getInstance(context)
+        val settings = runCatching {
+            UserPreferencesRepository(context).settings.first()
+        }.getOrNull()
         val scheduleDao = db.scheduleDao()
         val timetableDao = db.timetableDao()
 
@@ -106,6 +129,7 @@ class FlowGlanceWidget : GlanceAppWidget() {
                 activeTimetable.semesterStartMondayMillis,
                 dayStart,
                 activeTimetable.totalWeeks,
+                settings?.weekStartDay ?: com.example.data.WeekStartDay.MONDAY,
             )
             val courses = timetableDao.getCoursesForTimetable(activeTimetable.id)
             val sectionTimes = timetableDao.getSectionTimes(activeTimetable.id)
@@ -137,12 +161,11 @@ class FlowGlanceWidget : GlanceAppWidget() {
             }
         }
 
-        val chosen = candidates
-            .sortedWith(
-                compareByDescending<CandidateEntry> { nowMillis in it.startTimeMillis until it.endTimeMillis }
-                    .thenBy { it.startTimeMillis },
-            )
-            .firstOrNull() ?: return null
+        val sorted = candidates.sortedWith(
+            compareByDescending<CandidateEntry> { nowMillis in it.startTimeMillis until it.endTimeMillis }
+                .thenBy { it.startTimeMillis },
+        )
+        val chosen = sorted.firstOrNull() ?: return null
 
         val inProgress = nowMillis in chosen.startTimeMillis until chosen.endTimeMillis
         val targetMs = if (inProgress) chosen.endTimeMillis else chosen.startTimeMillis
@@ -163,6 +186,14 @@ class FlowGlanceWidget : GlanceAppWidget() {
             "$verb $remainingStr"
         }
 
+        val upcoming = sorted.drop(1).take(2).map { entry ->
+            WidgetSecondaryItem(
+                title = entry.title,
+                startClock = DateTimeUtils.formatTime(entry.startTimeMillis),
+                location = entry.location,
+            )
+        }
+
         return WidgetNextItem(
             sourceType = chosen.sourceType,
             title = chosen.title,
@@ -171,6 +202,8 @@ class FlowGlanceWidget : GlanceAppWidget() {
             statusBadge = badge,
             remainingText = remainingDisplay,
             isInProgress = inProgress,
+            totalRemainingToday = sorted.size,
+            upcomingItems = upcoming,
         )
     }
 
@@ -181,12 +214,18 @@ class FlowGlanceWidget : GlanceAppWidget() {
         val startTimeMillis: Long,
         val endTimeMillis: Long,
     )
+
+    companion object {
+        private val COMPACT_SIZE = DpSize(180.dp, 110.dp)
+        private val EXPANDED_SIZE = DpSize(250.dp, 172.dp)
+    }
 }
 
 @Composable
 private fun FlowWidgetContent(
     item: WidgetNextItem?,
     dateHeader: String,
+    showUpcomingList: Boolean,
     context: Context,
 ) {
     val openIntent = Intent(context, MainActivity::class.java).apply {
@@ -317,20 +356,62 @@ private fun FlowWidgetContent(
 
             Spacer(modifier = GlanceModifier.height(8.dp))
 
-            Box(
-                modifier = GlanceModifier
-                    .cornerRadius(12.dp)
-                    .background(GlanceTheme.colors.primary)
-                    .padding(horizontal = 12.dp, vertical = 5.dp),
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = item.remainingText,
-                    style = TextStyle(
-                        color = GlanceTheme.colors.onPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                )
+                Box(
+                    modifier = GlanceModifier
+                        .cornerRadius(12.dp)
+                        .background(GlanceTheme.colors.primary)
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                ) {
+                    Text(
+                        text = item.remainingText,
+                        style = TextStyle(
+                            color = GlanceTheme.colors.onPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                    )
+                }
+
+                if (item.totalRemainingToday > 1) {
+                    Spacer(modifier = GlanceModifier.width(8.dp))
+                    Text(
+                        text = "今日余 ${item.totalRemainingToday} 项",
+                        style = TextStyle(
+                            color = GlanceTheme.colors.onSurfaceVariant,
+                            fontSize = 11.sp,
+                        ),
+                        maxLines = 1,
+                    )
+                }
+            }
+
+            if (showUpcomingList && item.upcomingItems.isNotEmpty()) {
+                Spacer(modifier = GlanceModifier.height(8.dp))
+                Column(modifier = GlanceModifier.fillMaxWidth()) {
+                    item.upcomingItems.forEach { upcoming ->
+                        val nextLine = buildString {
+                            append(upcoming.startClock)
+                            append(" · ")
+                            append(upcoming.title)
+                            if (upcoming.location.isNotBlank()) {
+                                append(" ")
+                                append(upcoming.location)
+                            }
+                        }
+                        Text(
+                            text = nextLine,
+                            style = TextStyle(
+                                color = GlanceTheme.colors.onSurfaceVariant,
+                                fontSize = 11.sp,
+                            ),
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
         }
     }

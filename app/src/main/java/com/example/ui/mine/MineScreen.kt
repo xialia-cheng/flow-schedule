@@ -1,7 +1,11 @@
 package com.example.ui.mine
 
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -30,6 +34,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -47,6 +52,8 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.SettingsApplications
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material.icons.rounded.Update
@@ -69,6 +76,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,6 +100,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
 import com.example.R
@@ -103,6 +114,7 @@ import com.example.data.FullBackupPayload
 import com.example.data.TimetableImportExport
 import com.example.data.WeekStartDay
 import com.example.notification.LiveUpdatePermissionStatus
+import com.example.notification.ScheduleGuardService
 import com.example.smart.OpenAiCompatibleClient
 import com.example.ui.ScheduleViewModel
 import com.example.ui.components.AppHaptics
@@ -137,8 +149,31 @@ fun MineScreen(
     val flowColors = FlowTheme.colors
     val context = LocalContext.current
     val view = LocalView.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val haptics = rememberAppHaptics()
     val scope = rememberCoroutineScope()
+
+    var isIgnoringBatteryOpt by remember {
+        mutableStateOf(queryIgnoringBatteryOptimizations(context))
+    }
+    var isGuardServiceActive by remember {
+        mutableStateOf(ScheduleGuardService.isRunning)
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isIgnoringBatteryOpt = queryIgnoringBatteryOptimizations(context)
+                isGuardServiceActive = ScheduleGuardService.isRunning
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(settings.backgroundGuardEnabled) {
+        isGuardServiceActive = ScheduleGuardService.isRunning
+    }
 
     val exportBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json"),
@@ -412,6 +447,43 @@ fun MineScreen(
                                     }
                                 }
                             }
+
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                color = colorScheme.outlineVariant,
+                            )
+
+                            BackgroundGuardSettingsBlock(
+                                enabled = settings.backgroundGuardEnabled,
+                                isServiceRunning = isGuardServiceActive,
+                                isIgnoringBatteryOptimizations = isIgnoringBatteryOpt,
+                                onToggle = { checked ->
+                                    timetableViewModel.setBackgroundGuardEnabled(checked, context)
+                                    isGuardServiceActive = checked
+                                },
+                                onOpenAppDetails = {
+                                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                    }
+                                    runCatching { context.startActivity(intent) }.onFailure {
+                                        onShowMessage("无法打开系统应用详情页")
+                                    }
+                                },
+                                onOpenBatterySettings = {
+                                    val batteryIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                    val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                    }
+                                    val target = if (batteryIntent.resolveActivity(context.packageManager) != null) {
+                                        batteryIntent
+                                    } else {
+                                        fallbackIntent
+                                    }
+                                    runCatching { context.startActivity(target) }.onFailure {
+                                        onShowMessage("无法打开系统电池优化设置")
+                                    }
+                                },
+                            )
 
                             HorizontalDivider(
                                 modifier = Modifier.padding(vertical = 12.dp),
@@ -1933,3 +2005,202 @@ private fun SelectablePillOption(
         }
     }
 }
+
+@Composable
+private fun BackgroundGuardSettingsBlock(
+    enabled: Boolean,
+    isServiceRunning: Boolean,
+    isIgnoringBatteryOptimizations: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onOpenAppDetails: () -> Unit,
+    onOpenBatterySettings: () -> Unit,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Security,
+                    contentDescription = null,
+                    tint = colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = "全天后台常驻守护",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = colorScheme.onSurface,
+                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = if (enabled && isServiceRunning) {
+                                flowColors.completedAccent.copy(alpha = 0.14f)
+                            } else if (enabled) {
+                                flowColors.upcomingAccent.copy(alpha = 0.16f)
+                            } else {
+                                colorScheme.surfaceContainerHighest
+                            },
+                        ) {
+                            Text(
+                                text = when {
+                                    enabled && isServiceRunning -> "守护运行中"
+                                    enabled -> "巡检就绪"
+                                    else -> "未开启"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = when {
+                                    enabled && isServiceRunning -> flowColors.completedAccent
+                                    enabled -> flowColors.upcomingAccent
+                                    else -> colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier
+                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    .testTag("mine_guard_status_badge"),
+                            )
+                        }
+                    }
+                    Text(
+                        text = "开启静音常驻前台通知与 15 分钟周期巡检，滑掉多任务卡片或跨过零点也能持续刷新实况通知与准时闹钟",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = { checked ->
+                    haptics.tick()
+                    onToggle(checked)
+                },
+                modifier = Modifier.testTag("mine_switch_background_guard"),
+            )
+        }
+
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.75f)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "系统保活建议（防误杀）",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.onSurface,
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isIgnoringBatteryOptimizations) {
+                            flowColors.completedAccent.copy(alpha = 0.14f)
+                        } else {
+                            flowColors.upcomingAccent.copy(alpha = 0.16f)
+                        },
+                    ) {
+                        Text(
+                            text = if (isIgnoringBatteryOptimizations) "后台无限制已开启" else "建议关闭电池优化",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isIgnoringBatteryOptimizations) {
+                                flowColors.completedAccent
+                            } else {
+                                flowColors.upcomingAccent
+                            },
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+                Text(
+                    text = "请在系统「应用详情 / 耗电管理」中开启「允许自启动」「完全允许后台行为（关闭电池优化）」，并在最近任务界面下拉锁定微澜日程。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            haptics.tick()
+                            onOpenAppDetails()
+                        },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("mine_guard_app_details_button"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.SettingsApplications,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "应用详情/自启动",
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            haptics.tick()
+                            onOpenBatterySettings()
+                        },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("mine_guard_battery_button"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.BatterySaver,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "电池优化设置",
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun queryIgnoringBatteryOptimizations(context: Context): Boolean {
+    val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+    return runCatching { pm.isIgnoringBatteryOptimizations(context.packageName) }.getOrDefault(false)
+}
+

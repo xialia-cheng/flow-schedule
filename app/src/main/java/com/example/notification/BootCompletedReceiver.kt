@@ -7,6 +7,7 @@ import android.content.Intent
 import com.example.ScheduleApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class BootCompletedReceiver : BroadcastReceiver() {
@@ -30,6 +31,13 @@ class BootCompletedReceiver : BroadcastReceiver() {
                     forceAlert = false,
                     rescheduleAlarms = true,
                 )
+                val guardEnabled = runCatching {
+                    app.container.preferencesRepository.settings.first().backgroundGuardEnabled
+                }.getOrDefault(false)
+                if (guardEnabled) {
+                    ScheduleGuardWorkScheduler.schedulePeriodicGuard(context)
+                    ScheduleGuardService.tryStart(context)
+                }
             } finally {
                 pendingResult.finish()
             }
