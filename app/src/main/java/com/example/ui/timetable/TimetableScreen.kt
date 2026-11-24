@@ -45,18 +45,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CalendarViewDay
 import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,12 +77,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -126,7 +122,6 @@ fun TimetableScreen(
     onOpenSmartCapture: () -> Unit,
     onShowMessage: (String) -> Unit,
     onOpenPermissions: () -> Unit,
-    onTriggerFluidCloudTest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val haptics = rememberAppHaptics()
@@ -161,6 +156,7 @@ fun TimetableScreen(
     var showImportSheet by remember { mutableStateOf(false) }
     var showShareSheet by remember { mutableStateOf(false) }
     var showMoreSheet by remember { mutableStateOf(false) }
+    var showCourseOverviewDialog by remember { mutableStateOf(false) }
     var showTodayProgressDialog by remember { mutableStateOf(false) }
 
     // Live ticker: 1s while a Fluid Cloud Live Activity is active, otherwise 15s for timetable progress
@@ -221,7 +217,6 @@ fun TimetableScreen(
             onToggleEditMode = { isEditMode = !isEditMode },
             onToggleViewMode = { viewModel.toggleViewMode() },
             onImportClick = { showImportSheet = true },
-            onShareClick = { showShareSheet = true },
             onMoreClick = { showMoreSheet = true },
         )
 
@@ -264,7 +259,38 @@ fun TimetableScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        onClick = {
+                            haptics.tick()
+                            showCourseOverviewDialog = true
+                        },
+                        shape = CircleShape,
+                        color = colorScheme.surface.copy(alpha = 0.85f),
+                        modifier = Modifier.testTag("timetable_course_overview_button"),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.FormatListBulleted,
+                                contentDescription = "课程总览与批量删除",
+                                tint = colorScheme.onSurface,
+                                modifier = Modifier.size(13.dp),
+                            )
+                            Text(
+                                text = "总览",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colorScheme.onSurface,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
                     Surface(
                         onClick = {
                             haptics.tick()
@@ -617,6 +643,65 @@ fun TimetableScreen(
                                             )
                                         }
 
+                                        // Thin current-time indicator line on Today's column when viewing the actual current week
+                                        val todayColIndex = if (pageWeek == state.currentActualWeek) {
+                                            visibleIsoDays.indexOf(DateTimeUtils.isoDayOfWeek(liveNowMillis))
+                                                .takeIf { it in 0 until dayCount }
+                                        } else {
+                                            null
+                                        }
+                                        val currentTimeOffsetDp = if (todayColIndex != null) {
+                                            computeCurrentTimeGridOffsetDp(
+                                                sectionTimes = state.sectionTimes,
+                                                sectionCount = sectionCount,
+                                                sectionHeightDp = sectionHeight.value,
+                                                lunchAfterSection = lunchAfterSection,
+                                                lunchBreakHeightDp = lunchBreakHeight.value,
+                                                nowMillis = liveNowMillis,
+                                            )
+                                        } else {
+                                            null
+                                        }
+                                        if (todayColIndex != null && currentTimeOffsetDp != null) {
+                                            val indicatorColor = colorScheme.primary
+                                            val indicatorHalo = colorScheme.surface.copy(alpha = 0.88f)
+                                            Canvas(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .zIndex(1.5f),
+                                            ) {
+                                                val colX = (colWidth * todayColIndex).toPx()
+                                                val colW = colWidth.toPx()
+                                                val y = currentTimeOffsetDp.dp.toPx().coerceIn(2.dp.toPx(), size.height - 2.dp.toPx())
+                                                val dotRadius = 3.2.dp.toPx()
+                                                val dotCenterX = colX + dotRadius + 1.dp.toPx()
+                                                val lineEndX = (colX + colW - 1.5.dp.toPx()).coerceAtLeast(dotCenterX)
+
+                                                drawLine(
+                                                    color = indicatorHalo,
+                                                    start = Offset(dotCenterX, y),
+                                                    end = Offset(lineEndX, y),
+                                                    strokeWidth = 2.6.dp.toPx(),
+                                                )
+                                                drawLine(
+                                                    color = indicatorColor,
+                                                    start = Offset(dotCenterX, y),
+                                                    end = Offset(lineEndX, y),
+                                                    strokeWidth = 1.5.dp.toPx(),
+                                                )
+                                                drawCircle(
+                                                    color = indicatorHalo,
+                                                    radius = dotRadius + 1.2.dp.toPx(),
+                                                    center = Offset(dotCenterX, y),
+                                                )
+                                                drawCircle(
+                                                    color = indicatorColor,
+                                                    radius = dotRadius,
+                                                    center = Offset(dotCenterX, y),
+                                                )
+                                            }
+                                        }
+
                                         // Draw lunch break pill AFTER course cards, centered inside the widest unobstructed column run
                                         // (or elevated above cards with an opaque backdrop if every column spans across the break)
                                         if (resolvedLunchBreak != null && lunchBreakHeight > 0.dp) {
@@ -905,6 +990,7 @@ fun TimetableScreen(
                 showCourseEditor = true
             },
             onDeleteCourse = { viewModel.deleteCourse(it) },
+            onDeleteCourses = { viewModel.deleteCourses(it) },
             onSetShowMorningExercise = { viewModel.setShowMorningExercise(it) },
             onSetExtraBannerConfig = { title, start, end ->
                 viewModel.setExtraBannerConfig(title, start, end)
@@ -930,8 +1016,22 @@ fun TimetableScreen(
             onSetCompactMode = { viewModel.setCompactMode(it) },
             onOpenPermissions = onOpenPermissions,
             onOpenImportExport = { showImportSheet = true },
-            onTriggerFluidCloudTest = onTriggerFluidCloudTest,
+            onOpenShare = { showShareSheet = true },
             onDismiss = { showMoreSheet = false },
+        )
+    }
+
+    if (showCourseOverviewDialog) {
+        CourseOverviewDialog(
+            courses = state.courses,
+            onEdit = { course ->
+                showCourseOverviewDialog = false
+                editingCourse = course
+                showCourseEditor = true
+            },
+            onDeleteSingle = { viewModel.deleteCourse(it) },
+            onDeleteBatch = { viewModel.deleteCourses(it) },
+            onDismiss = { showCourseOverviewDialog = false },
         )
     }
 
@@ -953,7 +1053,6 @@ private fun TimetableTopBar(
     onToggleEditMode: () -> Unit,
     onToggleViewMode: () -> Unit,
     onImportClick: () -> Unit,
-    onShareClick: () -> Unit,
     onMoreClick: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -1011,7 +1110,7 @@ private fun TimetableTopBar(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                     }
-                } else if (!state.settings.compactMode && state.activeTimetable != null) {
+                } else if (!state.settings.compactMode && state.allTimetables.size > 1 && state.activeTimetable != null) {
                     Surface(
                         shape = CircleShape,
                         color = colorScheme.primaryContainer,
@@ -1028,7 +1127,7 @@ private fun TimetableTopBar(
                 }
             }
 
-            // Right: Import, Share, More
+            // Right: Import & More (Share moved into More sheet to reduce top bar noise)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
                     onClick = { haptics.tick(); onImportClick() },
@@ -1039,18 +1138,6 @@ private fun TimetableTopBar(
                     Icon(
                         imageVector = Icons.Rounded.FileDownload,
                         contentDescription = "导入课表",
-                        tint = colorScheme.onBackground,
-                    )
-                }
-                IconButton(
-                    onClick = { haptics.tick(); onShareClick() },
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .testTag("timetable_share_button"),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Share,
-                        contentDescription = "分享课表",
                         tint = colorScheme.onBackground,
                     )
                 }

@@ -525,7 +525,6 @@ private fun TabContentHost(
                     onOpenSmartCapture = { smartCaptureViewModel.openInputSheet() },
                     onShowMessage = onShowMessage,
                     onOpenPermissions = onOpenPermissions,
-                    onTriggerFluidCloudTest = onTriggerFluidCloudTest,
                 )
             }
 

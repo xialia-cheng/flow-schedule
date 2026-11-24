@@ -178,6 +178,18 @@ class TimetableRepository(
         liveUpdateCoordinator.syncAll(rescheduleAlarms = true)
     }
 
+    suspend fun deleteCourses(courseIds: Collection<Long>): Int {
+        val uniqueIds = courseIds.distinct()
+        if (uniqueIds.isEmpty()) return 0
+        uniqueIds.forEach { courseId ->
+            alarmScheduler.cancelAlarmsForCourse(courseId)
+            alarmScheduler.cancelCustomReReminder(isCourse = true, itemId = courseId)
+        }
+        timetableDao.deleteCoursesByIds(uniqueIds)
+        liveUpdateCoordinator.syncAll(rescheduleAlarms = true)
+        return uniqueIds.size
+    }
+
     suspend fun saveSectionTimes(timetableId: Long, times: List<SectionTimeEntity>) {
         val normalized = BellScheduleGenerator.normalize(times, timetableId)
         timetableDao.replaceSectionTimes(timetableId, normalized)

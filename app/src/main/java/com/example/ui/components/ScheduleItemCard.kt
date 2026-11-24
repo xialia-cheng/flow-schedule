@@ -70,17 +70,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.CustomScheduleTag
 import com.example.data.DateTimeUtils
 import com.example.data.RepeatRule
-import com.example.data.ScheduleCategory
 import com.example.data.ScheduleEntity
 import com.example.ui.theme.FlowMotion
-import com.example.ui.theme.FlowScheduleTheme
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 
@@ -620,115 +617,6 @@ fun ScheduleItemCard(
                     }
                 }
             }
-        }
-    }
-}
-
-@Preview(name = "Schedule List - Light", showBackground = true, backgroundColor = 0xFFF3F6FB)
-@Composable
-private fun PreviewScheduleListLight() {
-    val now = 1_760_000_000_000L
-    FlowScheduleTheme(darkTheme = false) {
-        Column(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.background)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            ScheduleListSectionHeader(title = "上午时段", count = 2)
-            ScheduleItemCard(
-                schedule = ScheduleEntity(
-                    id = 1L,
-                    title = "实况通知交互评审",
-                    notes = "三楼星河会议室 · 带上真机演示",
-                    startTimeMillis = now - 15 * 60_000L,
-                    endTimeMillis = now + 30 * 60_000L,
-                    repeatRule = RepeatRule.WORKDAYS,
-                    reminderMinutesBefore = 15,
-                    category = ScheduleCategory.MEETING,
-                ),
-                nowMillis = now,
-                showDateBadge = false,
-                isFirstInGroup = true,
-                isLastInGroup = false,
-                onToggleComplete = {},
-                onDelete = {},
-                onClick = {},
-            )
-            ScheduleItemCard(
-                schedule = ScheduleEntity(
-                    id = 2L,
-                    title = "深度专注：完成浅色主题细节打磨",
-                    notes = "核对对比度与卡片圆角阴影",
-                    startTimeMillis = now + 60 * 60_000L,
-                    endTimeMillis = now + 120 * 60_000L,
-                    repeatRule = RepeatRule.NONE,
-                    reminderMinutesBefore = 10,
-                    category = ScheduleCategory.FOCUS,
-                ),
-                nowMillis = now,
-                showDateBadge = false,
-                isFirstInGroup = false,
-                isLastInGroup = true,
-                onToggleComplete = {},
-                onDelete = {},
-                onClick = {},
-            )
-        }
-    }
-}
-
-@Preview(name = "Schedule List - Dark", showBackground = true, backgroundColor = 0xFF090C12)
-@Composable
-private fun PreviewScheduleListDark() {
-    val now = 1_760_000_000_000L
-    FlowScheduleTheme(darkTheme = true) {
-        Column(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.background)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            ScheduleListSectionHeader(title = "上午时段", count = 2)
-            ScheduleItemCard(
-                schedule = ScheduleEntity(
-                    id = 1L,
-                    title = "实况通知交互评审",
-                    notes = "三楼星河会议室 · 带上真机演示",
-                    startTimeMillis = now - 15 * 60_000L,
-                    endTimeMillis = now + 30 * 60_000L,
-                    repeatRule = RepeatRule.WORKDAYS,
-                    reminderMinutesBefore = 15,
-                    category = ScheduleCategory.MEETING,
-                ),
-                nowMillis = now,
-                showDateBadge = false,
-                isFirstInGroup = true,
-                isLastInGroup = false,
-                onToggleComplete = {},
-                onDelete = {},
-                onClick = {},
-            )
-            ScheduleItemCard(
-                schedule = ScheduleEntity(
-                    id = 2L,
-                    title = "晚间有氧慢跑 5 公里",
-                    notes = "公园环湖步道",
-                    startTimeMillis = now + 60 * 60_000L,
-                    endTimeMillis = now + 100 * 60_000L,
-                    repeatRule = RepeatRule.DAILY,
-                    reminderMinutesBefore = 15,
-                    category = ScheduleCategory.HEALTH,
-                    isCompleted = true,
-                ),
-                nowMillis = now,
-                showDateBadge = false,
-                isFirstInGroup = false,
-                isLastInGroup = true,
-                onToggleComplete = {},
-                onDelete = {},
-                onClick = {},
-            )
         }
     }
 }

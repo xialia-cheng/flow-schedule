@@ -49,17 +49,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.EventAvailable
 import androidx.compose.material.icons.rounded.Label
-import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -192,9 +189,7 @@ fun HomeScreen(
                         TopHeaderRow(
                             selectedDateMillis = state.selectedDateMillis,
                             nowMillis = state.nowMillis,
-                            permissionsReady = state.permissionStatus.allRecommendedGranted,
                             onJumpToday = { viewModel.jumpToToday() },
-                            onOpenPermissions = { viewModel.openPermissionSheet() },
                             onAddSchedule = { viewModel.openNewScheduleEditor() },
                         )
 
@@ -454,13 +449,10 @@ private fun LazyListScope.scheduleTimelineItems(
 private fun TopHeaderRow(
     selectedDateMillis: Long,
     nowMillis: Long,
-    permissionsReady: Boolean,
     onJumpToday: () -> Unit,
-    onOpenPermissions: () -> Unit,
     onAddSchedule: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val flowColors = FlowTheme.colors
     val haptics = rememberAppHaptics()
     val isSelectedToday = DateTimeUtils.isSameDay(selectedDateMillis, nowMillis)
 
@@ -483,63 +475,38 @@ private fun TopHeaderRow(
                 modifier = Modifier.weight(1f),
             )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // Primary "+ 新建日程" pill button placed cleanly in top bar right
+            Surface(
+                onClick = {
+                    haptics.tick()
+                    onAddSchedule()
+                },
+                shape = CircleShape,
+                color = colorScheme.primary,
+                modifier = Modifier
+                    .defaultMinSize(minHeight = 40.dp)
+                    .minimumInteractiveComponentSize()
+                    .testTag("add_schedule_button"),
             ) {
-                if (!permissionsReady) {
-                    IconButton(
-                        onClick = {
-                            haptics.tick()
-                            onOpenPermissions()
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .minimumInteractiveComponentSize()
-                            .testTag("permissions_status_button"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.NotificationsOff,
-                            contentDescription = stringResource(R.string.cd_open_permissions),
-                            tint = flowColors.upcomingAccent,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-
-                // Primary "+ 新建日程" pill button placed cleanly in top bar right
-                Surface(
-                    onClick = {
-                        haptics.tick()
-                        onAddSchedule()
-                    },
-                    shape = CircleShape,
-                    color = colorScheme.primary,
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = 40.dp)
-                        .minimumInteractiveComponentSize()
-                        .testTag("add_schedule_button"),
+                Row(
+                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = stringResource(R.string.cd_add_schedule),
-                            tint = colorScheme.onPrimary,
-                            modifier = Modifier.size(17.dp),
-                        )
-                        Text(
-                            text = stringResource(R.string.action_add_schedule),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = colorScheme.onPrimary,
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = stringResource(R.string.cd_add_schedule),
+                        tint = colorScheme.onPrimary,
+                        modifier = Modifier.size(17.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.action_add_schedule),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = colorScheme.onPrimary,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
                 }
             }
         }

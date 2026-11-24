@@ -13,7 +13,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,8 +26,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -37,13 +34,13 @@ import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.ImportExport
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.AlertDialog
@@ -86,13 +83,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.AppThemeMode
-import com.example.data.CourseColorPalette
 import com.example.data.CourseEntity
 import com.example.data.DateTimeUtils
 import com.example.data.DndLevel
 import com.example.data.SectionTimeEntity
 import com.example.data.TimetableEntity
 import com.example.data.WeekStartDay
+import com.example.ui.components.SettingsGroupCard
+import com.example.ui.components.SettingsNavigationRow
+import com.example.ui.components.SwitchSettingRow
 import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
@@ -111,6 +110,7 @@ fun TimetableMoreSheet(
     onUpdateTimetableSettings: (name: String, semesterStartMondayMillis: Long, totalWeeks: Int) -> Unit,
     onEditCourse: (CourseEntity) -> Unit,
     onDeleteCourse: (CourseEntity) -> Unit,
+    onDeleteCourses: (List<CourseEntity>) -> Unit,
     onSetShowMorningExercise: (Boolean) -> Unit,
     onSetExtraBannerConfig: (title: String, startTime: String, endTime: String) -> Unit,
     onSetShowLunchBreak: (Boolean) -> Unit,
@@ -130,7 +130,7 @@ fun TimetableMoreSheet(
     onSetCompactMode: (Boolean) -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenImportExport: () -> Unit,
-    onTriggerFluidCloudTest: () -> Unit,
+    onOpenShare: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -159,11 +159,31 @@ fun TimetableMoreSheet(
                 .padding(horizontal = 20.dp)
                 .navigationBarsPadding(),
         ) {
-            Text(
-                text = "课表控制中心",
-                style = MaterialTheme.typography.headlineSmall,
-                color = colorScheme.onSurface,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "课表控制中心",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = colorScheme.onSurface,
+                )
+                FilledTonalButton(
+                    onClick = {
+                        haptics.tick()
+                        onDismiss()
+                        onOpenShare()
+                    },
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.testTag("timetable_share_button"),
+                ) {
+                    Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("分享课表", style = MaterialTheme.typography.labelLarge)
+                }
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -322,8 +342,8 @@ fun TimetableMoreSheet(
             ) {
                 MoreActionTile(
                     icon = Icons.Rounded.FormatListBulleted,
-                    title = "已添课程",
-                    subtitle = "共 ${state.courses.size} 门课程",
+                    title = "课程总览",
+                    subtitle = "共 ${state.courses.size} 门 · 支持多选批量删",
                     onClick = { showAddedCoursesDialog = true },
                     modifier = Modifier
                         .weight(1f)
@@ -523,14 +543,15 @@ fun TimetableMoreSheet(
     }
 
     if (showAddedCoursesDialog) {
-        AddedCoursesDialog(
+        CourseOverviewDialog(
             courses = state.courses,
             onEdit = { course ->
                 showAddedCoursesDialog = false
                 onDismiss()
                 onEditCourse(course)
             },
-            onDelete = onDeleteCourse,
+            onDeleteSingle = onDeleteCourse,
+            onDeleteBatch = onDeleteCourses,
             onDismiss = { showAddedCoursesDialog = false },
         )
     }
@@ -553,11 +574,6 @@ fun TimetableMoreSheet(
                 showReminderDialog = false
                 onDismiss()
                 onOpenPermissions()
-            },
-            onTriggerFluidCloudTest = {
-                showReminderDialog = false
-                onDismiss()
-                onTriggerFluidCloudTest()
             },
             onDismiss = { showReminderDialog = false },
         )
@@ -1457,266 +1473,6 @@ private fun TimetableSettingsDialog(
     }
 }
 
-@Composable
-private fun SettingsGroupCard(
-    icon: ImageVector,
-    title: String,
-    trailing: @Composable (() -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val flowColors = FlowTheme.colors
-
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = flowColors.cardElevated,
-        border = BorderStroke(1.dp, colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colorScheme.onSurface,
-                    )
-                }
-                trailing?.invoke()
-            }
-            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.65f))
-            content()
-        }
-    }
-}
-
-@Composable
-private fun SettingsNavigationRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val haptics = rememberAppHaptics()
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.small)
-            .clickable {
-                haptics.tick()
-                onClick()
-            }
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = colorScheme.onSurface,
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Icon(
-            imageVector = Icons.Rounded.ChevronRight,
-            contentDescription = null,
-            tint = colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun SwitchSettingRow(
-    title: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    subtitle: String? = null,
-    modifier: Modifier = Modifier,
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val haptics = rememberAppHaptics()
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(end = 12.dp),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = colorScheme.onSurface,
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = {
-                haptics.tick()
-                onCheckedChange(it)
-            },
-        )
-    }
-}
-
-@Composable
-private fun AddedCoursesDialog(
-    courses: List<CourseEntity>,
-    onEdit: (CourseEntity) -> Unit,
-    onDelete: (CourseEntity) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val flowColors = FlowTheme.colors
-    val haptics = rememberAppHaptics()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("已添课程（${courses.size}）") },
-        text = {
-            if (courses.isEmpty()) {
-                Text(
-                    text = "当前课表还没有课程，点击右上角“+”添加或通过“导入”快速导入。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colorScheme.onSurfaceVariant,
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 360.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(courses, key = { it.id }) { course ->
-                        val style = CourseColorPalette.styleFor(course.colorIndex)
-                        val dotColor = if (flowColors.isDark) style.darkAccent else style.lightAccent
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(MaterialTheme.shapes.small)
-                                .clickable {
-                                    haptics.tick()
-                                    onEdit(course)
-                                },
-                            shape = MaterialTheme.shapes.small,
-                            color = colorScheme.surfaceContainerLow,
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(dotColor),
-                                    )
-                                    Column {
-                                        Text(
-                                            text = course.name,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            text = "${DateTimeUtils.dayOfWeekFullChinese(course.dayOfWeek)} ${course.startSection}-${course.endSection}节 · ${course.formattedLocation().ifEmpty { "未填地点" }}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                }
-                                IconButton(onClick = {
-                                    haptics.tick()
-                                    onDelete(course)
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.DeleteOutline,
-                                        contentDescription = "删除课程",
-                                        tint = flowColors.deleteAccent,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                haptics.tick()
-                onDismiss()
-            }) { Text("完成") }
-        },
-    )
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CourseReminderDialog(
@@ -1733,7 +1489,6 @@ private fun CourseReminderDialog(
     onSetFluidCloudDisplayOptions: (showLocation: Boolean, showTeacher: Boolean, showNotes: Boolean) -> Unit,
     onSetLockscreenDetails: (Boolean) -> Unit,
     onOpenPermissions: () -> Unit,
-    onTriggerFluidCloudTest: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val haptics = rememberAppHaptics()
@@ -1852,19 +1607,6 @@ private fun CourseReminderDialog(
                     checked = lockscreenDetails,
                     onCheckedChange = onSetLockscreenDetails,
                 )
-
-                Button(
-                    onClick = {
-                        haptics.tick()
-                        onTriggerFluidCloudTest()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                ) {
-                    Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("测试实况通知效果（1 分钟）")
-                }
 
                 TextButton(
                     onClick = {

@@ -64,6 +64,9 @@ interface TimetableDao {
     @Query("DELETE FROM courses WHERE id = :courseId")
     suspend fun deleteCourseById(courseId: Long)
 
+    @Query("DELETE FROM courses WHERE id IN (:courseIds)")
+    suspend fun deleteCoursesByIds(courseIds: List<Long>)
+
     @Query("DELETE FROM courses WHERE timetableId = :timetableId")
     suspend fun deleteCoursesForTimetable(timetableId: Long)
 

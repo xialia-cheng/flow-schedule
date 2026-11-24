@@ -1751,6 +1751,145 @@ class ExampleRobolectricTest {
             assertEquals("14:05", saved.lunchBreakEndTime)
         }
     }
+
+    @Test
+    fun `computeCurrentTimeGridOffsetDp tracks section progress inter-section break lunch band and out of hours`() {
+        val sections = CourseColorPalette.defaultSectionTimes(1L)
+        fun timeAt(hour: Int, minute: Int, second: Int = 0): Long {
+            return Calendar.getInstance().apply {
+                set(2026, Calendar.NOVEMBER, 25, hour, minute, second)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+        }
+
+        // Halfway through section 1 (08:00 - 08:45 -> 08:22:30) => 30dp
+        val midSection1 = com.example.ui.timetable.computeCurrentTimeGridOffsetDp(
+            sectionTimes = sections,
+            sectionCount = 12,
+            sectionHeightDp = 60f,
+            lunchAfterSection = 4,
+            lunchBreakHeightDp = 30f,
+            nowMillis = timeAt(8, 22, 30),
+        )
+        assertNotNull(midSection1)
+        assertEquals(30f, midSection1!!, 0.05f)
+
+        // Between section 1 and section 2 (08:50) => bottom of section 1 (60dp)
+        val interSectionBreak = com.example.ui.timetable.computeCurrentTimeGridOffsetDp(
+            sectionTimes = sections,
+            sectionCount = 12,
+            sectionHeightDp = 60f,
+            lunchAfterSection = 4,
+            lunchBreakHeightDp = 30f,
+            nowMillis = timeAt(8, 50),
+        )
+        assertNotNull(interSectionBreak)
+        assertEquals(60f, interSectionBreak!!, 0.05f)
+
+        // Halfway through lunch break after section 4 (11:40 - 14:00 -> 12:50) => 4*60 + 15 = 255dp
+        val midLunch = com.example.ui.timetable.computeCurrentTimeGridOffsetDp(
+            sectionTimes = sections,
+            sectionCount = 12,
+            sectionHeightDp = 60f,
+            lunchAfterSection = 4,
+            lunchBreakHeightDp = 30f,
+            nowMillis = timeAt(12, 50),
+        )
+        assertNotNull(midLunch)
+        assertEquals(255f, midLunch!!, 0.05f)
+
+        // Start of section 5 (14:00) includes lunch band height => 4*60 + 30 = 270dp
+        val startSection5 = com.example.ui.timetable.computeCurrentTimeGridOffsetDp(
+            sectionTimes = sections,
+            sectionCount = 12,
+            sectionHeightDp = 60f,
+            lunchAfterSection = 4,
+            lunchBreakHeightDp = 30f,
+            nowMillis = timeAt(14, 0),
+        )
+        assertNotNull(startSection5)
+        assertEquals(270f, startSection5!!, 0.05f)
+
+        // Outside bell schedule hours => null
+        assertNull(
+            com.example.ui.timetable.computeCurrentTimeGridOffsetDp(
+                sectionTimes = sections,
+                sectionCount = 12,
+                sectionHeightDp = 60f,
+                lunchAfterSection = 4,
+                lunchBreakHeightDp = 30f,
+                nowMillis = timeAt(7, 30),
+            ),
+        )
+        assertNull(
+            com.example.ui.timetable.computeCurrentTimeGridOffsetDp(
+                sectionTimes = sections,
+                sectionCount = 12,
+                sectionHeightDp = 60f,
+                lunchAfterSection = 4,
+                lunchBreakHeightDp = 30f,
+                nowMillis = timeAt(23, 0),
+            ),
+        )
+    }
+
+    @Test
+    fun `timetable dao batch deletes selected course ids while preserving remaining courses`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.ScheduleDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val dao = db.timetableDao()
+            kotlinx.coroutines.runBlocking {
+                val ttId = dao.insertTimetable(
+                    TimetableEntity(
+                        name = "测试课表",
+                        semesterStartMondayMillis = 1_790_000_000_000L,
+                        totalWeeks = 18,
+                        isActive = true,
+                    ),
+                )
+                val id1 = dao.insertCourse(
+                    CourseEntity(
+                        timetableId = ttId,
+                        name = "高等数学",
+                        dayOfWeek = 1,
+                        startSection = 1,
+                        endSection = 2,
+                    ),
+                )
+                val id2 = dao.insertCourse(
+                    CourseEntity(
+                        timetableId = ttId,
+                        name = "大学物理",
+                        dayOfWeek = 2,
+                        startSection = 3,
+                        endSection = 4,
+                    ),
+                )
+                val id3 = dao.insertCourse(
+                    CourseEntity(
+                        timetableId = ttId,
+                        name = "程序设计",
+                        dayOfWeek = 5,
+                        startSection = 5,
+                        endSection = 6,
+                    ),
+                )
+
+                dao.deleteCoursesByIds(listOf(id1, id3))
+
+                val remaining = dao.getCoursesForTimetable(ttId)
+                assertEquals(1, remaining.size)
+                assertEquals(id2, remaining.first().id)
+                assertEquals("大学物理", remaining.first().name)
+            }
+        } finally {
+            db.close()
+        }
+    }
 }
 
 

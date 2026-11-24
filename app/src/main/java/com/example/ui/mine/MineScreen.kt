@@ -1,18 +1,11 @@
 package com.example.ui.mine
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,16 +29,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BatterySaver
-import androidx.compose.material.icons.rounded.BugReport
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.ExpandLess
-import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Info
@@ -53,7 +41,6 @@ import androidx.compose.material.icons.rounded.Label
 import androidx.compose.material.icons.rounded.NetworkCheck
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Save
@@ -66,9 +53,7 @@ import androidx.compose.material.icons.rounded.Update
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WarningAmber
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -80,7 +65,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -94,7 +78,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -102,7 +85,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -113,7 +95,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
 import com.example.R
 import com.example.data.AppThemeMode
-import com.example.data.BackupRestoreMode
 import com.example.data.CustomAiConfig
 import com.example.data.CustomScheduleTag
 import com.example.data.DndLevel
@@ -127,7 +108,10 @@ import com.example.notification.ScheduleGuardService
 import com.example.smart.OpenAiCompatibleClient
 import com.example.ui.ScheduleViewModel
 import com.example.ui.components.AppHaptics
+import com.example.ui.components.BackupRestoreConfirmDialog
 import com.example.ui.components.CustomTagManagerDialog
+import com.example.ui.components.SelectablePillOption
+import com.example.ui.components.SwitchSettingRow
 import com.example.ui.components.rememberAppHaptics
 import com.example.ui.smart.SmartCaptureViewModel
 import com.example.ui.theme.FlowTheme
@@ -265,10 +249,8 @@ fun MineScreen(
                 )
             }
 
-            // 2. Fluid Cloud permission diagnostics & collapsible debug test area
+            // 2. Fluid Cloud permission diagnostics
             item(key = "fluid_cloud_section") {
-                var debugExpanded by rememberSaveable { mutableStateOf(false) }
-
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         text = "实况通知 · Live Updates",
@@ -280,77 +262,6 @@ fun MineScreen(
                         status = scheduleState.permissionStatus,
                         onOpenPermissions = onOpenPermissions,
                     )
-
-                    // Collapsible debug section containing "测试实况通知效果"
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        color = flowColors.cardElevated,
-                        border = BorderStroke(1.dp, colorScheme.outlineVariant),
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        haptics.tick()
-                                        debugExpanded = !debugExpanded
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                                    .testTag("mine_fluid_cloud_debug_toggle"),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.BugReport,
-                                        contentDescription = null,
-                                        tint = colorScheme.primary,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                    Column {
-                                        Text(
-                                            text = "实况通知调试与效果演练",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = colorScheme.onSurface,
-                                        )
-                                        Text(
-                                            text = if (debugExpanded) "点击收起调试面板" else "展开以手动触发 1 分钟状态栏实况胶囊或实时进度通知测试",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                }
-                                Icon(
-                                    imageVector = if (debugExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                                    contentDescription = if (debugExpanded) "收起调试区" else "展开调试区",
-                                    tint = colorScheme.onSurfaceVariant,
-                                )
-                            }
-
-                            AnimatedVisibility(
-                                visible = debugExpanded,
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut(),
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                                ) {
-                                    FluidCloudTestCard(
-                                        hasActiveTest = scheduleState.hasActiveTestSchedule,
-                                        onTriggerTest = onTriggerFluidCloudTest,
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
 
@@ -372,12 +283,13 @@ fun MineScreen(
                         border = BorderStroke(1.dp, colorScheme.outlineVariant),
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "上课自动触发实况通知",
                                 subtitle = "课前提醒窗口与上课期间在状态栏实况胶囊或进度通知中实时显示课程倒计时",
                                 checked = settings.courseReminderEnabled,
                                 onCheckedChange = { timetableViewModel.setCourseReminderEnabled(it) },
-                                testTag = "mine_switch_course_reminder",
+                                switchTestTag = "mine_switch_course_reminder",
+                                useLargeTitle = true,
                             )
 
                             if (settings.courseReminderEnabled) {
@@ -581,7 +493,7 @@ fun MineScreen(
                                 color = colorScheme.onSurface,
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "展示地点 / 教室",
                                 subtitle = "在实况通知标题与展开卡片中显示 @教室 或地点",
                                 checked = settings.fluidCloudShowLocation,
@@ -592,9 +504,10 @@ fun MineScreen(
                                         showNotes = settings.fluidCloudShowNotes,
                                     )
                                 },
-                                testTag = "mine_switch_fc_location",
+                                switchTestTag = "mine_switch_fc_location",
+                                useLargeTitle = true,
                             )
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "展示授课教师",
                                 subtitle = "在课程实况通知展开详情中附带授课教师姓名",
                                 checked = settings.fluidCloudShowTeacher,
@@ -605,9 +518,10 @@ fun MineScreen(
                                         showNotes = settings.fluidCloudShowNotes,
                                     )
                                 },
-                                testTag = "mine_switch_fc_teacher",
+                                switchTestTag = "mine_switch_fc_teacher",
+                                useLargeTitle = true,
                             )
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "展示备注信息",
                                 subtitle = "在课程与日程实况通知展开卡片中附带备注内容",
                                 checked = settings.fluidCloudShowNotes,
@@ -618,16 +532,18 @@ fun MineScreen(
                                         showNotes = checked,
                                     )
                                 },
-                                testTag = "mine_switch_fc_notes",
+                                switchTestTag = "mine_switch_fc_notes",
+                                useLargeTitle = true,
                             )
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "锁屏展示课程与日程详情",
                                 subtitle = "默认关闭；关闭时锁屏仅显示事件名称与倒计时，隐藏地点、教师与备注",
                                 checked = settings.fluidCloudLockscreenDetails,
                                 onCheckedChange = { checked ->
                                     timetableViewModel.setFluidCloudLockscreenDetails(checked)
                                 },
-                                testTag = "mine_switch_fc_lockscreen",
+                                switchTestTag = "mine_switch_fc_lockscreen",
+                                useLargeTitle = true,
                             )
                         }
                     }
@@ -701,7 +617,7 @@ fun MineScreen(
                                 color = colorScheme.outlineVariant,
                             )
 
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "系统壁纸动态取色（Dynamic Color）",
                                 subtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                     if (settings.useDynamicColor) {
@@ -714,7 +630,8 @@ fun MineScreen(
                                 },
                                 checked = settings.useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
                                 onCheckedChange = { timetableViewModel.setUseDynamicColor(it) },
-                                testTag = "mine_switch_dynamic_color",
+                                switchTestTag = "mine_switch_dynamic_color",
+                                useLargeTitle = true,
                             )
                         }
                     }
@@ -764,14 +681,15 @@ fun MineScreen(
                                 color = colorScheme.outlineVariant,
                             )
 
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "简洁模式",
                                 subtitle = "隐藏课表非本周灰显课程、附加时段条与下课时间",
                                 checked = settings.compactMode,
                                 onCheckedChange = { timetableViewModel.setCompactMode(it) },
-                                testTag = "mine_switch_compact",
+                                switchTestTag = "mine_switch_compact",
+                                useLargeTitle = true,
                             )
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "应用内触觉反馈",
                                 subtitle = "在切换标签、勾选完成与点击微调时提供清脆触感（尊重系统全局开关）",
                                 checked = settings.hapticFeedbackEnabled,
@@ -781,9 +699,10 @@ fun MineScreen(
                                     }
                                     timetableViewModel.setHapticFeedbackEnabled(enabled)
                                 },
-                                testTag = "mine_switch_haptic_feedback",
+                                switchTestTag = "mine_switch_haptic_feedback",
+                                useLargeTitle = true,
                             )
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = if (settings.extraBannerTitle.isNotBlank()) {
                                     "顶部附加时段条（${settings.extraBannerTitle}）"
                                 } else {
@@ -796,9 +715,10 @@ fun MineScreen(
                                 },
                                 checked = settings.showMorningExercise,
                                 onCheckedChange = { timetableViewModel.setShowMorningExercise(it) },
-                                testTag = "mine_switch_morning",
+                                switchTestTag = "mine_switch_morning",
+                                useLargeTitle = true,
                             )
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "课间午休分隔带（${settings.lunchBreakTitle.ifBlank { "午休" }}）",
                                 subtitle = if (settings.showLunchBreak) {
                                     "当前显示在第 ${settings.lunchAfterSection} 节后，可在课表设置中自定义"
@@ -807,21 +727,24 @@ fun MineScreen(
                                 },
                                 checked = settings.showLunchBreak,
                                 onCheckedChange = { timetableViewModel.setShowLunchBreak(it) },
-                                testTag = "mine_switch_lunch_break",
+                                switchTestTag = "mine_switch_lunch_break",
+                                useLargeTitle = true,
                             )
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "显示周末列（周六、周日）",
                                 subtitle = "关闭后仅展示周一至周五课表",
                                 checked = settings.showWeekend,
                                 onCheckedChange = { timetableViewModel.setShowWeekend(it) },
-                                testTag = "mine_switch_weekend",
+                                switchTestTag = "mine_switch_weekend",
+                                useLargeTitle = true,
                             )
-                            MineSwitchRow(
+                            SwitchSettingRow(
                                 title = "显示非本周课程（灰显角标）",
                                 subtitle = "半透明展示非本周课程并在底部标注“非本周”",
                                 checked = settings.showNonCurrentWeekCourses,
                                 onCheckedChange = { timetableViewModel.setShowNonCurrentWeekCourses(it) },
-                                testTag = "mine_switch_non_current",
+                                switchTestTag = "mine_switch_non_current",
+                                useLargeTitle = true,
                             )
                         }
                     }
@@ -1202,7 +1125,7 @@ fun MineScreen(
                                             color = colorScheme.onSurface,
                                         )
                                         Text(
-                                            text = "v${BuildConfig.VERSION_NAME} · 作者、权限指南、隐私与网络说明及 MIT 协议",
+                                            text = "v${BuildConfig.VERSION_NAME} · 作者、权限指南、实况演练及 MIT 协议",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = colorScheme.onSurfaceVariant,
                                         )
@@ -1228,6 +1151,8 @@ fun MineScreen(
     if (showAboutSheet) {
         AboutHelpLicenseSheet(
             updateState = updateState,
+            hasActiveTestSchedule = scheduleState.hasActiveTestSchedule,
+            onTriggerFluidCloudTest = onTriggerFluidCloudTest,
             onCheckUpdates = {
                 if (updateState.availableRelease != null && !updateState.isChecking) {
                     appUpdateViewModel.openUpdateDialog()
@@ -1261,66 +1186,14 @@ fun MineScreen(
     }
 
     pendingBackupPreview?.let { (rawJson, payload) ->
-        AlertDialog(
-            onDismissRequest = { pendingBackupPreview = null },
-            title = {
-                Text(
-                    text = "选择 JSON 备份恢复方式",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
+        BackupRestoreConfirmDialog(
+            payload = payload,
+            testTagPrefix = "mine_backup_restore_",
+            onSelectMode = { mode ->
+                timetableViewModel.restoreFullBackupJson(rawJson, mode)
+                pendingBackupPreview = null
             },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val lunchSuffix = if (payload.lunchBreakBackup != null) "及午休分隔带配置" else ""
-                    Text(
-                        text = "已解析到 ${payload.timetables.size} 张课表、${payload.courses.size} 门课程、${payload.schedules.size} 条日程（含已完成记录）$lunchSuffix。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "• 智能合并（推荐）：保留现有本地数据并自动跳过完全重复的课程与日程。\n• 清空覆盖：先清空当前所有课表、节次与日程，再按备份完全还原。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant,
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        haptics.confirm()
-                        timetableViewModel.restoreFullBackupJson(rawJson, BackupRestoreMode.SMART_MERGE)
-                        pendingBackupPreview = null
-                    },
-                    modifier = Modifier.testTag("mine_backup_restore_merge"),
-                ) {
-                    Text("智能合并")
-                }
-            },
-            dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TextButton(
-                        onClick = {
-                            haptics.tick()
-                            pendingBackupPreview = null
-                        },
-                        modifier = Modifier.testTag("mine_backup_restore_cancel"),
-                    ) {
-                        Text("取消")
-                    }
-                    TextButton(
-                        onClick = {
-                            haptics.tick()
-                            timetableViewModel.restoreFullBackupJson(rawJson, BackupRestoreMode.OVERWRITE_ALL)
-                            pendingBackupPreview = null
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = colorScheme.error),
-                        modifier = Modifier.testTag("mine_backup_restore_overwrite"),
-                    ) {
-                        Text("清空覆盖")
-                    }
-                }
-            },
+            onDismiss = { pendingBackupPreview = null },
         )
     }
 }
@@ -1457,105 +1330,6 @@ private fun StatMetricColumn(
     }
 }
 
-@Composable
-private fun FluidCloudTestCard(
-    hasActiveTest: Boolean,
-    onTriggerTest: () -> Unit,
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val flowColors = FlowTheme.colors
-    val haptics = rememberAppHaptics()
-    val shape = MaterialTheme.shapes.large
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .clickable {
-                haptics.tick()
-                onTriggerTest()
-            }
-            .testTag("mine_test_fluid_cloud_button"),
-        shape = shape,
-        color = flowColors.cardElevated,
-        border = BorderStroke(
-            width = 1.dp,
-            brush = Brush.horizontalGradient(
-                colors = listOf(
-                    flowColors.secondaryAccent.copy(alpha = 0.55f),
-                    flowColors.liveAccent.copy(alpha = 0.55f),
-                ),
-            ),
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            flowColors.secondaryAccent.copy(alpha = if (flowColors.isDark) 0.14f else 0.08f),
-                            flowColors.liveAccent.copy(alpha = if (flowColors.isDark) 0.10f else 0.07f),
-                        ),
-                    ),
-                )
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoAwesome,
-                        contentDescription = null,
-                        tint = colorScheme.primary,
-                    )
-                }
-                Column {
-                    Text(
-                        text = stringResource(R.string.test_fluid_cloud_btn),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = colorScheme.onSurface,
-                    )
-                    Text(
-                        text = if (hasActiveTest) {
-                            "1 分钟测试正在状态栏实况胶囊或实时进度通知中倒计时，点击可重新发起"
-                        } else {
-                            "触发 1 分钟倒计时（含 @地点、分段进度条与切换免打扰 / 立即结束）"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(colorScheme.primary),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = "发起实况通知测试",
-                    tint = colorScheme.onPrimary,
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun FluidCloudPermissionCard(
@@ -1631,45 +1405,6 @@ private fun FluidCloudPermissionCard(
     }
 }
 
-@Composable
-private fun MineSwitchRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    testTag: String,
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val haptics = rememberAppHaptics()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = colorScheme.onSurface,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = {
-                haptics.tick()
-                onCheckedChange(it)
-            },
-            modifier = Modifier.testTag(testTag),
-        )
-    }
-}
 
 @Composable
 private fun CustomAiSettingsCard(
@@ -2042,74 +1777,6 @@ private fun CustomAiSettingsCard(
     }
 }
 
-@Composable
-private fun SelectablePillOption(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    showCheckIcon: Boolean = false,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val haptics = rememberAppHaptics()
-    val containerColor = if (selected) {
-        colorScheme.primaryContainer
-    } else {
-        colorScheme.surfaceContainerLow
-    }
-    val contentColor = if (selected) {
-        colorScheme.onPrimaryContainer
-    } else {
-        colorScheme.onSurfaceVariant
-    }
-    val borderColor = if (selected) {
-        colorScheme.primary.copy(alpha = 0.55f)
-    } else {
-        colorScheme.outlineVariant
-    }
-
-    Surface(
-        onClick = {
-            haptics.tick()
-            onClick()
-        },
-        modifier = modifier.height(38.dp),
-        shape = CircleShape,
-        color = containerColor,
-        contentColor = contentColor,
-        border = BorderStroke(1.dp, borderColor),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            if (showCheckIcon && selected) {
-                Icon(
-                    imageVector = Icons.Rounded.Check,
-                    contentDescription = null,
-                    tint = contentColor,
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontSize = 12.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                color = contentColor,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Clip,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
 
 @Composable
 private fun BackgroundGuardSettingsBlock(

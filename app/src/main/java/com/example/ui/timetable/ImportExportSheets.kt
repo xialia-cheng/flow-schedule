@@ -32,7 +32,6 @@ import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material.icons.rounded.WarningAmber
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,7 +46,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -65,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.BackupRestoreMode
 import com.example.data.FullBackupPayload
 import com.example.data.TimetableImportExport
+import com.example.ui.components.BackupRestoreConfirmDialog
 import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
@@ -510,55 +509,14 @@ fun TimetableImportSheet(
     }
 
     pendingBackupPreview?.let { (rawJson, payload) ->
-        AlertDialog(
-            onDismissRequest = { pendingBackupPreview = null },
-            title = { Text("选择备份恢复方式") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val lunchSuffix = if (payload.lunchBreakBackup != null) "及午休分隔带配置" else ""
-                    Text(
-                        text = "已解析到 ${payload.timetables.size} 个课表、${payload.courses.size} 门课程、${payload.schedules.size} 条日程$lunchSuffix。",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = "• 智能合并（推荐）：按名称与时间自动去重，重复导入同一文件不会产生冗余数据。\n• 覆盖恢复：清空当前所有本地课表与日程后完全还原。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+        BackupRestoreConfirmDialog(
+            payload = payload,
+            onSelectMode = { mode ->
+                onRestoreBackupJson(rawJson, mode)
+                pendingBackupPreview = null
+                onDismiss()
             },
-            confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(
-                        onClick = {
-                            haptics.tick()
-                            onRestoreBackupJson(rawJson, BackupRestoreMode.OVERWRITE_ALL)
-                            pendingBackupPreview = null
-                            onDismiss()
-                        },
-                    ) {
-                        Text("覆盖恢复", color = MaterialTheme.colorScheme.error)
-                    }
-                    Button(
-                        onClick = {
-                            haptics.confirm()
-                            onRestoreBackupJson(rawJson, BackupRestoreMode.SMART_MERGE)
-                            pendingBackupPreview = null
-                            onDismiss()
-                        },
-                    ) {
-                        Text("智能合并")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    haptics.tick()
-                    pendingBackupPreview = null
-                }) {
-                    Text("取消")
-                }
-            },
+            onDismiss = { pendingBackupPreview = null },
         )
     }
 }

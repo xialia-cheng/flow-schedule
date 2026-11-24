@@ -168,6 +168,74 @@ fun resolveLunchBreak(
     )
 }
 
+/**
+ * Computes the vertical Y offset (in Dp) of [nowMillis] inside the timetable week grid.
+ * Returns null when [nowMillis] is outside the configured bell schedule range ([firstSection.start .. lastSection.end])
+ * or when [sectionTimes] is empty.
+ */
+fun computeCurrentTimeGridOffsetDp(
+    sectionTimes: List<SectionTimeEntity>,
+    sectionCount: Int,
+    sectionHeightDp: Float,
+    lunchAfterSection: Int?,
+    lunchBreakHeightDp: Float,
+    nowMillis: Long,
+): Float? {
+    val safeCount = sectionCount.coerceAtLeast(1)
+    val slots = sectionTimes
+        .filter { it.sectionNumber in 1..safeCount }
+        .sortedBy { it.sectionNumber }
+    if (slots.isEmpty() || sectionHeightDp <= 0f) return null
+
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = nowMillis }
+    val nowSec = cal.get(java.util.Calendar.HOUR_OF_DAY) * 3600 +
+        cal.get(java.util.Calendar.MINUTE) * 60 +
+        cal.get(java.util.Calendar.SECOND)
+
+    fun toSec(hour: Int, minute: Int): Int = hour * 3600 + minute * 60
+    fun sectionTopDp(sectionNumber: Int): Float {
+        val lunchExtra = if (lunchAfterSection != null && lunchBreakHeightDp > 0f && sectionNumber > lunchAfterSection) {
+            lunchBreakHeightDp
+        } else {
+            0f
+        }
+        return (sectionNumber - 1) * sectionHeightDp + lunchExtra
+    }
+
+    val firstStartSec = toSec(slots.first().startHour, slots.first().startMinute)
+    val lastEndSec = toSec(slots.last().endHour, slots.last().endMinute)
+    if (nowSec < firstStartSec || nowSec > lastEndSec) return null
+
+    for (i in slots.indices) {
+        val slot = slots[i]
+        val startSec = toSec(slot.startHour, slot.startMinute)
+        val endSec = toSec(slot.endHour, slot.endMinute)
+        val top = sectionTopDp(slot.sectionNumber)
+        if (nowSec in startSec..endSec && endSec > startSec) {
+            val fraction = ((nowSec - startSec).toFloat() / (endSec - startSec).toFloat()).coerceIn(0f, 1f)
+            return top + fraction * sectionHeightDp
+        }
+        if (i + 1 < slots.size) {
+            val nextSlot = slots[i + 1]
+            val nextStartSec = toSec(nextSlot.startHour, nextSlot.startMinute)
+            if (nowSec in endSec..nextStartSec && nextStartSec > endSec) {
+                val isAcrossLunch = lunchAfterSection != null &&
+                    lunchBreakHeightDp > 0f &&
+                    slot.sectionNumber == lunchAfterSection &&
+                    nextSlot.sectionNumber == lunchAfterSection + 1
+                return if (isAcrossLunch) {
+                    val lunchTop = top + sectionHeightDp
+                    val fraction = ((nowSec - endSec).toFloat() / (nextStartSec - endSec).toFloat()).coerceIn(0f, 1f)
+                    lunchTop + fraction * lunchBreakHeightDp
+                } else {
+                    top + sectionHeightDp
+                }
+            }
+        }
+    }
+    return null
+}
+
 class TimetableViewModel(
     private val timetableRepository: TimetableRepository,
     private val preferencesRepository: UserPreferencesRepository,
@@ -478,6 +546,14 @@ class TimetableViewModel(
         viewModelScope.launch {
             timetableRepository.deleteCourse(course.id)
             emitMessage("已删除课程「${course.name}」")
+        }
+    }
+
+    fun deleteCourses(courses: List<CourseEntity>) {
+        if (courses.isEmpty()) return
+        viewModelScope.launch {
+            val deletedCount = timetableRepository.deleteCourses(courses.map { it.id })
+            emitMessage("已批量删除 $deletedCount 门课程")
         }
     }
 
