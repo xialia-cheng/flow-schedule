@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,15 +36,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.notification.BackgroundKeepAliveHelper
 import com.example.notification.LiveUpdatePermissionStatus
 import com.example.ui.theme.FlowTheme
 
@@ -58,6 +62,8 @@ fun PermissionOnboardingSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val context = LocalContext.current
+    val oemBrand = remember { BackgroundKeepAliveHelper.detectOemBrand() }
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
     val haptics = rememberAppHaptics()
@@ -233,6 +239,61 @@ fun PermissionOnboardingSheet(
                                 else -> flowColors.secondaryAccent
                             },
                             modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = flowColors.cardElevated,
+                border = BorderStroke(1.dp, colorScheme.outlineVariant),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Shield,
+                            contentDescription = null,
+                            tint = colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "后台常驻与防清理建议 · ${oemBrand.displayName}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = colorScheme.onSurface,
+                        )
+                    }
+                    Text(
+                        text = BackgroundKeepAliveHelper.oemKeepAliveGuideText(oemBrand),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+                    FilledTonalButton(
+                        onClick = {
+                            haptics.tick()
+                            BackgroundKeepAliveHelper.openAutoStartOrBackgroundSettings(context)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .testTag("perm_oem_autostart_button"),
+                        shape = MaterialTheme.shapes.small,
+                    ) {
+                        Text(
+                            text = "一键前往自启动 / 后台管理",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
                         )
                     }
                 }

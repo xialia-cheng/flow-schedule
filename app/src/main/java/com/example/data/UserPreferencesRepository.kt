@@ -106,6 +106,7 @@ data class AppSettings(
     val lastUpdateCheckMillis: Long = 0L,
     val hapticFeedbackEnabled: Boolean = true,
     val backgroundGuardEnabled: Boolean = false,
+    val excludeFromRecents: Boolean = false,
     val customAiConfig: CustomAiConfig = CustomAiConfig(),
 )
 
@@ -152,6 +153,7 @@ class UserPreferencesRepository(private val context: Context) {
         val LAST_UPDATE_CHECK_MILLIS = longPreferencesKey("last_update_check_millis")
         val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
         val BACKGROUND_GUARD_ENABLED = booleanPreferencesKey("background_guard_enabled")
+        val EXCLUDE_FROM_RECENTS = booleanPreferencesKey("exclude_from_recents")
 
         // Optional custom OpenAI-compatible AI config (API key encrypted via Android Keystore)
         val CUSTOM_AI_ENABLED = booleanPreferencesKey("custom_ai_enabled")
@@ -219,6 +221,7 @@ class UserPreferencesRepository(private val context: Context) {
             lastUpdateCheckMillis = prefs[Keys.LAST_UPDATE_CHECK_MILLIS] ?: 0L,
             hapticFeedbackEnabled = prefs[Keys.HAPTIC_FEEDBACK_ENABLED] ?: true,
             backgroundGuardEnabled = prefs[Keys.BACKGROUND_GUARD_ENABLED] ?: false,
+            excludeFromRecents = prefs[Keys.EXCLUDE_FROM_RECENTS] ?: false,
             customAiConfig = CustomAiConfig(
                 enabled = prefs[Keys.CUSTOM_AI_ENABLED] ?: false,
                 baseUrl = prefs[Keys.CUSTOM_AI_BASE_URL].orEmpty(),
@@ -363,13 +366,18 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
-    suspend fun addCustomScheduleTag(name: String, colorHex: String): CustomScheduleTag? {
+    suspend fun addCustomScheduleTag(
+        name: String,
+        colorHex: String,
+        iconKey: String = "label",
+    ): CustomScheduleTag? {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return null
         val newTag = CustomScheduleTag(
             id = "tag_${System.currentTimeMillis()}_${trimmed.hashCode().and(0xFFFF)}",
             name = trimmed.take(12),
-            colorHex = colorHex.trim().ifEmpty { "#0B72FF" },
+            colorHex = colorHex.trim().ifEmpty { "#3B82F6" },
+            iconKey = iconKey.trim().ifEmpty { "label" },
         )
         context.userPreferencesDataStore.edit { prefs ->
             val current = CustomScheduleTagCodec.decode(prefs[Keys.CUSTOM_SCHEDULE_TAGS_JSON].orEmpty())
@@ -378,14 +386,23 @@ class UserPreferencesRepository(private val context: Context) {
         return newTag
     }
 
-    suspend fun updateCustomScheduleTag(id: String, name: String, colorHex: String) {
+    suspend fun updateCustomScheduleTag(
+        id: String,
+        name: String,
+        colorHex: String,
+        iconKey: String = "label",
+    ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         context.userPreferencesDataStore.edit { prefs ->
             val current = CustomScheduleTagCodec.decode(prefs[Keys.CUSTOM_SCHEDULE_TAGS_JSON].orEmpty())
             val updated = current.map { tag ->
                 if (tag.id == id) {
-                    tag.copy(name = trimmed.take(12), colorHex = colorHex.trim().ifEmpty { tag.colorHex })
+                    tag.copy(
+                        name = trimmed.take(12),
+                        colorHex = colorHex.trim().ifEmpty { tag.colorHex },
+                        iconKey = iconKey.trim().ifEmpty { tag.iconKey },
+                    )
                 } else {
                     tag
                 }
@@ -455,6 +472,12 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setBackgroundGuardEnabled(enabled: Boolean) {
         context.userPreferencesDataStore.edit { prefs ->
             prefs[Keys.BACKGROUND_GUARD_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setExcludeFromRecents(enabled: Boolean) {
+        context.userPreferencesDataStore.edit { prefs ->
+            prefs[Keys.EXCLUDE_FROM_RECENTS] = enabled
         }
     }
 }

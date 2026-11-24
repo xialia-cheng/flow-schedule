@@ -8,8 +8,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,9 +86,11 @@ internal fun TimetableDayTimelineView(
     nowMillis: Long,
     onShiftDay: (Int) -> Unit,
     onClickCourse: (CourseEntity) -> Unit,
+    onLongClickCourse: ((CourseEntity) -> Unit)? = null,
     onAddCourseForDay: (dayOfWeek: Int) -> Unit,
     onToggleScheduleComplete: (ScheduleEntity) -> Unit,
     onEditSchedule: (ScheduleEntity) -> Unit,
+    onLongClickSchedule: ((ScheduleEntity) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -304,6 +308,7 @@ internal fun TimetableDayTimelineView(
                             isCurrentWeek = isInWeek,
                             isOngoing = isOngoing,
                             onClick = { onClickCourse(course) },
+                            onLongClick = onLongClickCourse?.let { cb -> { cb(course) } },
                         )
                     }
                 }
@@ -326,6 +331,7 @@ internal fun TimetableDayTimelineView(
                             nowMillis = nowMillis,
                             onToggleComplete = { onToggleScheduleComplete(schedule) },
                             onEdit = { onEditSchedule(schedule) },
+                            onLongClick = onLongClickSchedule?.let { cb -> { cb(schedule) } },
                         )
                     }
                 }
@@ -446,6 +452,7 @@ private fun DayTimelineSectionLabel(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DayCourseTimelineCard(
     course: CourseEntity,
@@ -454,6 +461,7 @@ private fun DayCourseTimelineCard(
     isCurrentWeek: Boolean,
     isOngoing: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
@@ -482,10 +490,18 @@ private fun DayCourseTimelineCard(
             .fillMaxWidth()
             .alpha(if (isCurrentWeek) 1f else 0.68f)
             .clip(shape)
-            .clickable {
-                haptics.tick()
-                onClick()
-            }
+            .combinedClickable(
+                onClick = {
+                    haptics.tick()
+                    onClick()
+                },
+                onLongClick = onLongClick?.let { cb ->
+                    {
+                        haptics.longPress()
+                        cb()
+                    }
+                },
+            )
             .testTag("day_course_card_${course.id}"),
         shape = shape,
         color = cardBg,
@@ -658,12 +674,14 @@ private fun DayCourseTimelineCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DayAssociatedScheduleCard(
     schedule: ScheduleEntity,
     nowMillis: Long,
     onToggleComplete: () -> Unit,
     onEdit: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
@@ -675,10 +693,18 @@ private fun DayAssociatedScheduleCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .clickable {
-                haptics.tick()
-                onEdit()
-            }
+            .combinedClickable(
+                onClick = {
+                    haptics.tick()
+                    onEdit()
+                },
+                onLongClick = onLongClick?.let { cb ->
+                    {
+                        haptics.longPress()
+                        cb()
+                    }
+                },
+            )
             .testTag("day_schedule_card_${schedule.id}"),
         shape = shape,
         color = flowColors.cardElevated,
@@ -737,7 +763,7 @@ private fun DayAssociatedScheduleCard(
                         color = colorScheme.secondaryContainer,
                     ) {
                         Text(
-                            text = schedule.category.label,
+                            text = schedule.customTagName.ifBlank { schedule.category.label },
                             style = MaterialTheme.typography.labelSmall,
                             color = colorScheme.onSecondaryContainer,
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),

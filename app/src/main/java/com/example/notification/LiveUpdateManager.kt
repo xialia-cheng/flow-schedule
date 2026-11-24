@@ -242,6 +242,48 @@ class LiveUpdateManager(private val context: Context) {
 
     fun canPostNotificationsNow(): Boolean = queryPermissionStatus().hasPostNotifications
 
+    @SuppressLint("MissingPermission")
+    fun postCustomReReminderNotification(
+        itemId: Long,
+        isCourse: Boolean,
+        title: String,
+        subtitle: String,
+    ) {
+        if (!canPostNotificationsNow()) return
+        ensureNotificationChannel()
+        val launchIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(
+                EXTRA_SOURCE_TYPE,
+                if (isCourse) LiveActivitySourceType.COURSE.name else LiveActivitySourceType.SCHEDULE.name,
+            )
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            25_000 + (if (isCourse) 5_000 else 0) + (itemId.toInt() and 0x0FFF),
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notificationId = 20_000 + (if (isCourse) 5_000 else 0) + (itemId.toInt() and 0x0FFF)
+        val smallIconRes = if (isCourse) {
+            R.drawable.ic_stat_course_live
+        } else {
+            R.drawable.ic_stat_flow_schedule
+        }
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(smallIconRes)
+            .setContentTitle(title.ifBlank { "微澜日程重提醒" })
+            .setContentText(subtitle.ifBlank { "您预约的提醒时间已到" })
+            .setStyle(NotificationCompat.BigTextStyle().bigText(subtitle.ifBlank { "您预约的提醒时间已到" }))
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(Notification.DEFAULT_ALL)
+            .setAutoCancel(true)
+            .setContentIntent(contentPendingIntent)
+            .build()
+        runCatching { notificationManager.notify(notificationId, notification) }
+    }
+
     /**
      * Checks in-memory state, persisted last-posted end time, and active system notifications.
      * If the live session has already reached or passed its end time, immediately cancels the

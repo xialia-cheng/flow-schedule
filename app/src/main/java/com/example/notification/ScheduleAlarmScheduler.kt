@@ -152,7 +152,7 @@ class ScheduleAlarmScheduler(private val context: Context) {
         }
     }
 
-    private fun createPendingIntent(
+        private fun createPendingIntent(
         baseRequestKey: Int,
         phase: Int,
         triggerAtMillis: Long,
@@ -170,9 +170,152 @@ class ScheduleAlarmScheduler(private val context: Context) {
         )
     }
 
+    private val reReminderPrefs by lazy {
+        context.getSharedPreferences(PREFS_RE_REMINDERS, Context.MODE_PRIVATE)
+    }
+
+    fun scheduleCustomReReminder(
+        isCourse: Boolean,
+        itemId: Long,
+        title: String,
+        subtitle: String,
+        delayMinutes: Int,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Long {
+        val safeDelay = delayMinutes.coerceIn(1, 720)
+        val triggerAtMillis = nowMillis + safeDelay * 60_000L
+        val key = reReminderPrefKey(isCourse, itemId)
+        reReminderPrefs.edit().putLong(key, triggerAtMillis).apply()
+
+        val pi = createReReminderPendingIntent(
+            isCourse = isCourse,
+            itemId = itemId,
+            title = title,
+            subtitle = subtitle,
+            triggerAtMillis = triggerAtMillis,
+        )
+        scheduleExactOrFallbackAlarm(triggerAtMillis, pi, useAlarmClock = true)
+        return triggerAtMillis
+    }
+
+    fun cancelCustomReReminder(isCourse: Boolean, itemId: Long) {
+        val key = reReminderPrefKey(isCourse, itemId)
+        reReminderPrefs.edit().remove(key).apply()
+        val pi = createReReminderPendingIntent(
+            isCourse = isCourse,
+            itemId = itemId,
+            title = "",
+            subtitle = "",
+            triggerAtMillis = 0L,
+        )
+        alarmManager.cancel(pi)
+        pi.cancel()
+    }
+
+    fun getActiveReReminderMillis(
+        isCourse: Boolean,
+        itemId: Long,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Long? {
+        val key = reReminderPrefKey(isCourse, itemId)
+        val stored = reReminderPrefs.getLong(key, 0L)
+        if (stored <= 0L) return null
+        if (stored <= nowMillis) {
+            reReminderPrefs.edit().remove(key).apply()
+            return null
+        }
+        return stored
+    }
+
+    fun clearReReminderEntry(key: String) {
+        if (key.isNotBlank()) {
+            reReminderPrefs.edit().remove(key).apply()
+        }
+    }
+
+    private fun scheduleExactOrFallbackAlarm(
+        triggerAtMillis: Long,
+        pendingIntent: PendingIntent,
+        useAlarmClock: Boolean,
+    ) {
+        val canExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            runCatching { alarmManager.canScheduleExactAlarms() }.getOrDefault(false)
+        } else {
+            true
+        }
+        runCatching {
+            if (canExact && useAlarmClock) {
+                val showIntent = PendingIntent.getActivity(
+                    context,
+                    0,
+                    Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                alarmManager.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent),
+                    pendingIntent,
+                )
+            } else if (canExact) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent,
+                )
+            } else {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent,
+                )
+            }
+        }.onFailure {
+            runCatching {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent,
+                )
+            }
+        }
+    }
+
+    private fun createReReminderPendingIntent(
+        isCourse: Boolean,
+        itemId: Long,
+        title: String,
+        subtitle: String,
+        triggerAtMillis: Long,
+    ): PendingIntent {
+        val requestCode = RE_REMINDER_REQUEST_BASE +
+            (if (isCourse) 10_000 else 0) +
+            (itemId.toInt() and 0x1FFF)
+        val intent = Intent(context, ScheduleAlarmReceiver::class.java).apply {
+            action = ScheduleAlarmReceiver.ACTION_CUSTOM_RE_REMINDER
+            putExtra(EXTRA_RE_REMINDER_KEY, reReminderPrefKey(isCourse, itemId))
+            putExtra(EXTRA_RE_REMINDER_IS_COURSE, isCourse)
+            putExtra(EXTRA_RE_REMINDER_ITEM_ID, itemId)
+            putExtra(EXTRA_RE_REMINDER_TITLE, title)
+            putExtra(EXTRA_RE_REMINDER_SUBTITLE, subtitle)
+            putExtra(EXTRA_TRIGGER_MILLIS, triggerAtMillis)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     companion object {
         const val EXTRA_ALARM_PHASE = "extra_alarm_phase"
         const val EXTRA_TRIGGER_MILLIS = "extra_trigger_millis"
+        const val EXTRA_RE_REMINDER_KEY = "extra_re_reminder_key"
+        const val EXTRA_RE_REMINDER_IS_COURSE = "extra_re_reminder_is_course"
+        const val EXTRA_RE_REMINDER_ITEM_ID = "extra_re_reminder_item_id"
+        const val EXTRA_RE_REMINDER_TITLE = "extra_re_reminder_title"
+        const val EXTRA_RE_REMINDER_SUBTITLE = "extra_re_reminder_subtitle"
         const val PHASE_REMINDER = 1
         const val PHASE_START = 2
         const val PHASE_PROGRESS_25 = 3
@@ -182,6 +325,11 @@ class ScheduleAlarmScheduler(private val context: Context) {
         const val PHASE_DAILY_ROLLOVER = 8
 
         private const val SYSTEM_DAILY_ROLLOVER_REQUEST_KEY = 920_000
+        private const val RE_REMINDER_REQUEST_BASE = 850_000
+        private const val PREFS_RE_REMINDERS = "flow_re_reminders"
+
+        fun reReminderPrefKey(isCourse: Boolean, itemId: Long): String =
+            if (isCourse) "course_$itemId" else "schedule_$itemId"
 
         private val ALL_PHASES = listOf(
             PHASE_REMINDER,

@@ -34,6 +34,12 @@ enum class ScheduleFilter(val label: String) {
     SELECTED_DAY("按日"),
 }
 
+sealed class ScheduleTagFilter {
+    data object All : ScheduleTagFilter()
+    data class BuiltIn(val category: ScheduleCategory) : ScheduleTagFilter()
+    data class Custom(val tagId: String) : ScheduleTagFilter()
+}
+
 data class ScheduleTimelineGroup(
     val key: String,
     val title: String,
@@ -48,6 +54,7 @@ data class ScheduleUiState(
     val scheduledDateKeys: Set<String> = emptySet(),
     val allSchedules: List<ScheduleEntity> = emptyList(),
     val selectedFilter: ScheduleFilter = ScheduleFilter.TODAY,
+    val selectedTagFilter: ScheduleTagFilter = ScheduleTagFilter.All,
     val filteredSchedules: List<ScheduleEntity> = emptyList(),
     val groupedSchedules: List<ScheduleTimelineGroup> = emptyList(),
     val todayTotalCount: Int = 0,
@@ -69,6 +76,8 @@ data class ScheduleUiState(
     val showPermissionSheet: Boolean = false,
     val showEditorSheet: Boolean = false,
     val editingSchedule: ScheduleEntity? = null,
+    val quickActionSchedule: ScheduleEntity? = null,
+    val reReminderVersion: Int = 0,
 ) {
     val isDayScopedFilter: Boolean
         get() = selectedFilter == ScheduleFilter.TODAY ||
@@ -89,11 +98,14 @@ class ScheduleViewModel(
 ) : ViewModel() {
 
     private val _selectedFilter = MutableStateFlow(ScheduleFilter.TODAY)
+    private val _selectedTagFilter = MutableStateFlow<ScheduleTagFilter>(ScheduleTagFilter.All)
     private val _selectedDateMillis = MutableStateFlow(DateTimeUtils.startOfDayMillis(System.currentTimeMillis()))
     private val _nowMillis = MutableStateFlow(System.currentTimeMillis())
     private val _showPermissionSheet = MutableStateFlow(false)
     private val _showEditorSheet = MutableStateFlow(false)
     private val _editingSchedule = MutableStateFlow<ScheduleEntity?>(null)
+    private val _quickActionSchedule = MutableStateFlow<ScheduleEntity?>(null)
+    private val _reReminderVersion = MutableStateFlow(0)
 
     private val _snackbarEvent = MutableStateFlow<SnackbarEvent?>(null)
     val snackbarEvent: StateFlow<SnackbarEvent?> = _snackbarEvent
@@ -114,15 +126,34 @@ class ScheduleViewModel(
     private var lastNotificationSyncAt: Long = 0L
     private var lastLiveScheduleId: Long? = null
 
-    private val filterDateFlow = combine(_selectedFilter, _selectedDateMillis) { f, d -> f to d }
+    private data class FilterCriteria(
+        val filter: ScheduleFilter,
+        val selectedDateMillis: Long,
+        val tagFilter: ScheduleTagFilter,
+    )
+
+    private val filterCriteriaFlow = combine(
+        _selectedFilter,
+        _selectedDateMillis,
+        _selectedTagFilter,
+    ) { f, d, tf -> FilterCriteria(f, d, tf) }
 
     private val combinedDataFlow = combine(
         repository.allSchedules,
         _nowMillis,
-        filterDateFlow,
+        filterCriteriaFlow,
         liveUpdateManager.permissionStatus,
         preferencesRepository.settings,
-    ) { allSchedules, nowMillis, (filter, selectedDateMillis), permStatus, settings ->
+    ) { allSchedules, nowMillis, criteria, permStatus, settings ->
+        val filter = criteria.filter
+        val selectedDateMillis = criteria.selectedDateMillis
+        val effectiveTagFilter = when (val tf = criteria.tagFilter) {
+            is ScheduleTagFilter.Custom -> {
+                if (settings.customScheduleTags.any { it.id == tf.tagId }) tf else ScheduleTagFilter.All
+            }
+            else -> tf
+        }
+
         val todaySchedules = allSchedules.filter {
             DateTimeUtils.isToday(it.startTimeMillis, nowMillis) || it.isInProgress(nowMillis)
         }
@@ -147,7 +178,7 @@ class ScheduleViewModel(
         val hasActiveTest = incomplete.any { it.isTestSchedule && !it.isExpired(nowMillis) }
 
         val startOfTomorrow = DateTimeUtils.addDays(nowMillis, 1)
-        val filtered = when (filter) {
+        val dateScoped = when (filter) {
             ScheduleFilter.TODAY -> todaySchedules
             ScheduleFilter.TOMORROW -> allSchedules.filter {
                 DateTimeUtils.isTomorrow(it.startTimeMillis, nowMillis)
@@ -160,10 +191,22 @@ class ScheduleViewModel(
                 it.startTimeMillis >= startOfTomorrow || (!it.isCompleted && it.endTimeMillis > nowMillis)
             }
             ScheduleFilter.ALL -> allSchedules
-        }.sortedWith(
-            compareBy<ScheduleEntity> { it.isCompleted }
-                .thenBy { it.startTimeMillis },
-        )
+        }
+
+        val filtered = dateScoped
+            .filter { item ->
+                when (effectiveTagFilter) {
+                    ScheduleTagFilter.All -> true
+                    is ScheduleTagFilter.BuiltIn ->
+                        item.customTagId.isBlank() && item.category == effectiveTagFilter.category
+                    is ScheduleTagFilter.Custom ->
+                        item.customTagId == effectiveTagFilter.tagId
+                }
+            }
+            .sortedWith(
+                compareBy<ScheduleEntity> { it.isCompleted }
+                    .thenBy { it.startTimeMillis },
+            )
 
         val grouped = buildTimelineGroups(filtered, filter, nowMillis)
         val scheduledDateKeys = allSchedules
@@ -179,6 +222,7 @@ class ScheduleViewModel(
             scheduledDateKeys = scheduledDateKeys,
             allSchedules = allSchedules,
             selectedFilter = filter,
+            selectedTagFilter = effectiveTagFilter,
             filteredSchedules = filtered,
             groupedSchedules = grouped,
             todayTotalCount = todayTotal,
@@ -194,18 +238,39 @@ class ScheduleViewModel(
         )
     }
 
-    val uiState: StateFlow<ScheduleUiState> = combine(
-        combinedDataFlow,
-        liveUpdateManager.activeLiveActivity,
+    private val modalOverlayFlow = combine(
         _showPermissionSheet,
         _showEditorSheet,
         _editingSchedule,
-    ) { base, activeLive, showPerm, showEditor, editing ->
+        _quickActionSchedule,
+        _reReminderVersion,
+    ) { showPerm, showEditor, editing, quickAction, reReminderVer ->
+        ModalOverlayState(showPerm, showEditor, editing, quickAction, reReminderVer)
+    }
+
+    private data class ModalOverlayState(
+        val showPerm: Boolean,
+        val showEditor: Boolean,
+        val editing: ScheduleEntity?,
+        val quickAction: ScheduleEntity?,
+        val reReminderVersion: Int,
+    )
+
+    val uiState: StateFlow<ScheduleUiState> = combine(
+        combinedDataFlow,
+        liveUpdateManager.activeLiveActivity,
+        modalOverlayFlow,
+    ) { base, activeLive, modal ->
+        val syncedQuickAction = modal.quickAction?.let { target ->
+            base.allSchedules.firstOrNull { it.id == target.id } ?: target
+        }
         base.copy(
             activeLiveActivity = activeLive,
-            showPermissionSheet = showPerm,
-            showEditorSheet = showEditor,
-            editingSchedule = editing,
+            showPermissionSheet = modal.showPerm,
+            showEditorSheet = modal.showEditor,
+            editingSchedule = modal.editing,
+            quickActionSchedule = syncedQuickAction,
+            reReminderVersion = modal.reReminderVersion,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -384,6 +449,18 @@ class ScheduleViewModel(
         }
     }
 
+    fun selectTagFilter(tagFilter: ScheduleTagFilter) {
+        _selectedTagFilter.value = if (_selectedTagFilter.value == tagFilter && tagFilter != ScheduleTagFilter.All) {
+            ScheduleTagFilter.All
+        } else {
+            tagFilter
+        }
+    }
+
+    fun resetTagFilter() {
+        _selectedTagFilter.value = ScheduleTagFilter.All
+    }
+
     fun selectDate(dateMillis: Long) {
         val normalized = DateTimeUtils.startOfDayMillis(dateMillis)
         _selectedDateMillis.value = normalized
@@ -430,6 +507,14 @@ class ScheduleViewModel(
         _editingSchedule.value = null
     }
 
+    fun openQuickActionMenu(schedule: ScheduleEntity) {
+        _quickActionSchedule.value = schedule
+    }
+
+    fun dismissQuickActionMenu() {
+        _quickActionSchedule.value = null
+    }
+
     fun saveSchedule(
         existingId: Long,
         title: String,
@@ -470,20 +555,20 @@ class ScheduleViewModel(
         }
     }
 
-    fun addCustomTag(name: String, colorHex: String) {
+    fun addCustomTag(name: String, colorHex: String, iconKey: String = "label") {
         viewModelScope.launch {
-            val created = preferencesRepository.addCustomScheduleTag(name, colorHex)
+            val created = preferencesRepository.addCustomScheduleTag(name, colorHex, iconKey)
             if (created != null) {
                 emitSnackbar("已添加自定义标签「${created.name}」")
             }
         }
     }
 
-    fun updateCustomTag(id: String, name: String, colorHex: String) {
+    fun updateCustomTag(id: String, name: String, colorHex: String, iconKey: String = "label") {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            preferencesRepository.updateCustomScheduleTag(id, trimmed, colorHex)
+            preferencesRepository.updateCustomScheduleTag(id, trimmed, colorHex, iconKey)
             repository.updateCustomTagMetadata(id, trimmed, colorHex)
             emitSnackbar("已更新标签「$trimmed」")
         }
@@ -491,6 +576,9 @@ class ScheduleViewModel(
 
     fun deleteCustomTag(id: String) {
         viewModelScope.launch {
+            if (_selectedTagFilter.value == ScheduleTagFilter.Custom(id)) {
+                _selectedTagFilter.value = ScheduleTagFilter.All
+            }
             preferencesRepository.deleteCustomScheduleTag(id)
             repository.clearDeletedCustomTag(id)
             emitSnackbar("已删除自定义标签")
@@ -515,6 +603,61 @@ class ScheduleViewModel(
             repository.snoozeScheduleBy10Minutes(schedule.id)
             emitSnackbar("「${schedule.title}」已延后 10 分钟")
         }
+    }
+
+    fun moveScheduleToDate(schedule: ScheduleEntity, targetDateMillis: Long) {
+        viewModelScope.launch {
+            val updated = shiftScheduleToDate(schedule, targetDateMillis)
+            repository.updateScheduleQuick(updated)
+            _quickActionSchedule.value = null
+            emitSnackbar("已将「${schedule.title}」移至 ${DateTimeUtils.formatDateShort(updated.startTimeMillis)}")
+        }
+    }
+
+    fun updateScheduleTag(
+        schedule: ScheduleEntity,
+        category: ScheduleCategory,
+        customTag: CustomScheduleTag? = null,
+    ) {
+        viewModelScope.launch {
+            val updated = applyScheduleTag(schedule, category, customTag)
+            repository.updateScheduleQuick(updated)
+            _quickActionSchedule.value = null
+            val tagLabel = customTag?.name ?: category.label
+            emitSnackbar("已将「${schedule.title}」标签改为「$tagLabel」")
+        }
+    }
+
+    fun updateScheduleReminderLead(schedule: ScheduleEntity, leadMinutes: Int) {
+        viewModelScope.launch {
+            val safeMinutes = leadMinutes.coerceIn(0, 180)
+            repository.updateScheduleQuick(schedule.copy(reminderMinutesBefore = safeMinutes))
+            emitSnackbar(
+                if (safeMinutes == 0) {
+                    "已关闭「${schedule.title}」提前提醒"
+                } else {
+                    "已设为提前 $safeMinutes 分钟提醒「${schedule.title}」"
+                },
+            )
+        }
+    }
+
+    fun scheduleItemReReminder(schedule: ScheduleEntity, delayMinutes: Int) {
+        val safeMinutes = delayMinutes.coerceIn(1, 720)
+        val triggerAt = repository.scheduleCustomReReminder(schedule, safeMinutes)
+        _reReminderVersion.value += 1
+        _quickActionSchedule.value = null
+        emitSnackbar("已设 ${DateTimeUtils.formatTime(triggerAt)}「${schedule.title}」重提醒闹钟")
+    }
+
+    fun cancelItemReReminder(schedule: ScheduleEntity) {
+        repository.cancelCustomReReminder(schedule.id)
+        _reReminderVersion.value += 1
+        emitSnackbar("已取消「${schedule.title}」重提醒")
+    }
+
+    fun getScheduleReReminderMillis(scheduleId: Long): Long? {
+        return repository.getCustomReReminderMillis(scheduleId)
     }
 
     fun deleteSchedule(schedule: ScheduleEntity) {
@@ -570,6 +713,42 @@ class ScheduleViewModel(
                 preferencesRepository = preferencesRepository,
                 liveUpdateManager = liveUpdateManager,
             ) as T
+        }
+    }
+
+    companion object {
+        fun shiftScheduleToDate(schedule: ScheduleEntity, targetDateMillis: Long): ScheduleEntity {
+            val (hour, minute) = DateTimeUtils.extractHourMinute(schedule.startTimeMillis)
+            val duration = (schedule.endTimeMillis - schedule.startTimeMillis).coerceAtLeast(60_000L)
+            val newStart = DateTimeUtils.combineDateAndTime(targetDateMillis, hour, minute)
+            return schedule.copy(
+                startTimeMillis = newStart,
+                endTimeMillis = newStart + duration,
+                dismissedLiveUpdate = false,
+            )
+        }
+
+        fun applyScheduleTag(
+            schedule: ScheduleEntity,
+            category: ScheduleCategory,
+            customTag: CustomScheduleTag?,
+        ): ScheduleEntity {
+            return if (customTag != null) {
+                schedule.copy(
+                    customTagId = customTag.id,
+                    customTagName = customTag.name,
+                    customTagColorHex = customTag.colorHex,
+                    dismissedLiveUpdate = false,
+                )
+            } else {
+                schedule.copy(
+                    category = category,
+                    customTagId = "",
+                    customTagName = "",
+                    customTagColorHex = "",
+                    dismissedLiveUpdate = false,
+                )
+            }
         }
     }
 }

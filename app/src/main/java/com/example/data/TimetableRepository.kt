@@ -117,8 +117,61 @@ class TimetableRepository(
         return id
     }
 
+    suspend fun moveCourseToDay(course: CourseEntity, targetDayOfWeek: Int) {
+        alarmScheduler.cancelAlarmsForCourse(course.id)
+        timetableDao.updateCourse(course.copy(dayOfWeek = targetDayOfWeek.coerceIn(1, 7)))
+        liveUpdateCoordinator.syncAll(rescheduleAlarms = true)
+    }
+
+    suspend fun updateCourseColor(
+        course: CourseEntity,
+        sameNameSiblings: List<CourseEntity>,
+        colorIndex: Int,
+        customColorHex: String = "",
+    ) {
+        val normalizedHex = CourseColorPalette.parseHexColorOrNull(customColorHex)
+            ?.let { CourseColorPalette.formatHex(it) }
+            ?: ""
+        timetableDao.updateCourse(
+            course.copy(colorIndex = colorIndex, customColorHex = normalizedHex),
+        )
+        sameNameSiblings.forEach { sibling ->
+            if (sibling.id != course.id) {
+                timetableDao.updateCourse(
+                    sibling.copy(colorIndex = colorIndex, customColorHex = normalizedHex),
+                )
+            }
+        }
+        liveUpdateCoordinator.syncAll(rescheduleAlarms = true)
+    }
+
+    fun scheduleCourseReReminder(course: CourseEntity, delayMinutes: Int): Long {
+        val secLabel = if (course.startSection == course.endSection) {
+            "第${course.startSection}节"
+        } else {
+            "第${course.startSection}-${course.endSection}节"
+        }
+        val locPart = course.compactDisplayLocation().let { if (it.isNotEmpty()) " $it" else "" }
+        return alarmScheduler.scheduleCustomReReminder(
+            isCourse = true,
+            itemId = course.id,
+            title = "课程重提醒 · ${course.name}",
+            subtitle = "${DateTimeUtils.dayOfWeekFullChinese(course.dayOfWeek)} $secLabel$locPart",
+            delayMinutes = delayMinutes,
+        )
+    }
+
+    fun cancelCourseReReminder(courseId: Long) {
+        alarmScheduler.cancelCustomReReminder(isCourse = true, itemId = courseId)
+    }
+
+    fun getCourseReReminderMillis(courseId: Long): Long? {
+        return alarmScheduler.getActiveReReminderMillis(isCourse = true, itemId = courseId)
+    }
+
     suspend fun deleteCourse(courseId: Long) {
         alarmScheduler.cancelAlarmsForCourse(courseId)
+        alarmScheduler.cancelCustomReReminder(isCourse = true, itemId = courseId)
         timetableDao.deleteCourseById(courseId)
         liveUpdateCoordinator.syncAll(rescheduleAlarms = true)
     }

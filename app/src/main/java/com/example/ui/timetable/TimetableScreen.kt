@@ -17,8 +17,10 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -99,6 +101,7 @@ import com.example.data.BellScheduleGenerator
 import com.example.data.SectionTimeEntity
 import com.example.notification.LiveActivityItem
 import com.example.notification.LiveUpdatePermissionStatus
+import com.example.ui.components.CourseLongPressSheet
 import com.example.ui.components.FluidCloudCapsuleBanner
 import com.example.ui.components.SmartCaptureFab
 import com.example.ui.components.rememberAppHaptics
@@ -117,6 +120,7 @@ fun TimetableScreen(
     permissionStatus: LiveUpdatePermissionStatus,
     onToggleScheduleComplete: (ScheduleEntity) -> Unit,
     onEditSchedule: (ScheduleEntity) -> Unit,
+    onLongClickSchedule: (ScheduleEntity) -> Unit = {},
     onOpenSmartCapture: () -> Unit,
     onShowMessage: (String) -> Unit,
     onOpenPermissions: () -> Unit,
@@ -150,6 +154,7 @@ fun TimetableScreen(
     var editorInitialDay by remember { mutableIntStateOf(1) }
     var editorInitialSection by remember { mutableIntStateOf(1) }
     var inspectingCourse by remember { mutableStateOf<CourseEntity?>(null) }
+    var longPressedCourse by remember { mutableStateOf<CourseEntity?>(null) }
 
     var showImportSheet by remember { mutableStateOf(false) }
     var showShareSheet by remember { mutableStateOf(false) }
@@ -611,6 +616,7 @@ fun TimetableScreen(
                                                 compactMode = compactMode,
                                                 fontScale = fontScale,
                                                 onClick = { haptics.tick(); inspectingCourse = course },
+                                                onLongClick = { haptics.longPress(); longPressedCourse = course },
                                                 modifier = Modifier
                                                     .offset(x = leftOffset, y = topOffset)
                                                     .width(colWidth)
@@ -671,6 +677,7 @@ fun TimetableScreen(
                             nowMillis = liveNowMillis,
                             onShiftDay = { delta -> viewModel.shiftSelectedDate(delta) },
                             onClickCourse = { inspectingCourse = it },
+                            onLongClickCourse = { longPressedCourse = it },
                             onAddCourseForDay = { dayOfWeek ->
                                 editingCourse = null
                                 editorInitialDay = dayOfWeek
@@ -679,6 +686,7 @@ fun TimetableScreen(
                             },
                             onToggleScheduleComplete = onToggleScheduleComplete,
                             onEditSchedule = onEditSchedule,
+                            onLongClickSchedule = onLongClickSchedule,
                         )
                     }
                 }
@@ -758,6 +766,44 @@ fun TimetableScreen(
             onDelete = { target ->
                 viewModel.deleteCourse(target)
             },
+        )
+    }
+
+    longPressedCourse?.let { rawCourse ->
+        val currentCourse = state.courses.firstOrNull { it.id == rawCourse.id } ?: rawCourse
+        val secLabel = if (currentCourse.startSection == currentCourse.endSection) {
+            "第${currentCourse.startSection}节"
+        } else {
+            "第${currentCourse.startSection}-${currentCourse.endSection}节"
+        }
+        val activeReReminder = remember(currentCourse.id, state.reReminderVersion) {
+            viewModel.getCourseReReminderMillis(currentCourse.id)
+        }
+        CourseLongPressSheet(
+            course = currentCourse,
+            sectionLabel = secLabel,
+            courseReminderEnabled = state.settings.courseReminderEnabled,
+            courseReminderLeadMinutes = state.settings.courseReminderLeadMinutes,
+            activeReReminderMillis = activeReReminder,
+            onDismiss = { longPressedCourse = null },
+            onMoveToDay = { dayOfWeek -> viewModel.moveCourseToDay(currentCourse, dayOfWeek) },
+            onMoveToDate = { dateMillis -> viewModel.moveCourseToDate(currentCourse, dateMillis) },
+            onSelectColor = { colorIdx -> viewModel.updateCourseColor(currentCourse, colorIdx) },
+            onScheduleReReminder = { minutes -> viewModel.scheduleCourseReReminder(currentCourse, minutes) },
+            onCancelReReminder = { viewModel.cancelCourseReReminder(currentCourse) },
+            onSetCourseReminderLead = { minutes ->
+                if (!state.settings.courseReminderEnabled) {
+                    viewModel.setCourseReminderEnabled(true)
+                }
+                viewModel.setCourseReminderLeadMinutes(minutes)
+            },
+            onDisableCourseReminder = { viewModel.setCourseReminderEnabled(false) },
+            onInspect = { inspectingCourse = currentCourse },
+            onEdit = {
+                editingCourse = currentCourse
+                showCourseEditor = true
+            },
+            onDelete = { viewModel.deleteCourse(currentCourse) },
         )
     }
 
@@ -1891,6 +1937,7 @@ private fun formatMinutesReadable(minutes: Int): String {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CourseGridCard(
     course: CourseEntity,
@@ -1898,6 +1945,7 @@ private fun CourseGridCard(
     compactMode: Boolean,
     fontScale: Float = 1.0f,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -1928,7 +1976,10 @@ private fun CourseGridCard(
         modifier = modifier
             .alpha(if (isCurrentWeek) 1f else 0.56f)
             .clip(shape)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
             .testTag("course_card_${course.id}"),
         shape = shape,
         color = bgColor,

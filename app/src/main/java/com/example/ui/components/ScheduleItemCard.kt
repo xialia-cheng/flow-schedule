@@ -1,17 +1,27 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +79,7 @@ import com.example.data.DateTimeUtils
 import com.example.data.RepeatRule
 import com.example.data.ScheduleCategory
 import com.example.data.ScheduleEntity
+import com.example.ui.theme.FlowMotion
 import com.example.ui.theme.FlowScheduleTheme
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
@@ -134,7 +145,7 @@ fun ScheduleListSectionHeader(
  * ColorOS 17 Aquamorphic Timeline Schedule Row:
  * Left monospace time rail + smooth vertical timeline node/connector + elevated 22dp card with swipe-to-delete.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ScheduleItemCard(
     schedule: ScheduleEntity,
@@ -146,6 +157,7 @@ fun ScheduleItemCard(
     onToggleComplete: (ScheduleEntity) -> Unit,
     onDelete: (ScheduleEntity) -> Unit,
     onClick: (ScheduleEntity) -> Unit,
+    onLongClick: ((ScheduleEntity) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val flowColors = FlowTheme.colors
@@ -153,6 +165,7 @@ fun ScheduleItemCard(
     val haptics = rememberAppHaptics()
     val tagLabel = schedule.resolvedTagLabel(customTags)
     val tagColor = schedule.resolvedTagColor(customTags)
+    val tagIcon = schedule.resolvedTagIcon(customTags)
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -328,29 +341,52 @@ fun ScheduleItemCard(
                     .padding(vertical = 3.dp)
             }
 
-            Surface(
-                modifier = cardModifier
-                    .clip(cardShape)
-                    .clickable {
-                        haptics.tick()
-                        onClick(schedule)
-                    },
-                shape = cardShape,
-                color = if (schedule.isCompleted) {
+            val cardContainerColor by animateColorAsState(
+                targetValue = if (schedule.isCompleted) {
                     colorScheme.surfaceContainerLow
                 } else {
                     flowColors.cardElevated
                 },
+                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                label = "schedule_card_container_color",
+            )
+            val cardBorderColor by animateColorAsState(
+                targetValue = when {
+                    isInProgress -> flowColors.liveAccent.copy(alpha = if (flowColors.isDark) 0.55f else 0.6f)
+                    isImminent -> flowColors.upcomingAccent.copy(alpha = 0.5f)
+                    else -> colorScheme.outlineVariant
+                },
+                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                label = "schedule_card_border_color",
+            )
+
+            Surface(
+                modifier = cardModifier
+                    .clip(cardShape)
+                    .combinedClickable(
+                        onClick = {
+                            haptics.tick()
+                            onClick(schedule)
+                        },
+                        onLongClick = onLongClick?.let { callback ->
+                            {
+                                haptics.longPress()
+                                callback(schedule)
+                            }
+                        },
+                    ),
+                shape = cardShape,
+                color = cardContainerColor,
                 border = BorderStroke(
                     width = if (isInProgress || isImminent) 1.2.dp else 1.dp,
-                    color = when {
-                        isInProgress -> flowColors.liveAccent.copy(alpha = if (flowColors.isDark) 0.55f else 0.6f)
-                        isImminent -> flowColors.upcomingAccent.copy(alpha = 0.5f)
-                        else -> colorScheme.outlineVariant
-                    },
+                    color = cardBorderColor,
                 ),
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateContentSize(animationSpec = FlowMotion.standardSpring()),
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -414,15 +450,28 @@ fun ScheduleItemCard(
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = tagColor.copy(
-                                        alpha = if (flowColors.isDark) 0.16f else 0.12f,
+                                        alpha = if (flowColors.isDark) 0.16f else 0.10f,
                                     ),
                                 ) {
-                                    Text(
-                                        text = tagLabel,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = tagColor,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp),
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = tagIcon,
+                                            contentDescription = null,
+                                            tint = tagColor,
+                                            modifier = Modifier.size(11.dp),
+                                        )
+                                        Text(
+                                            text = tagLabel,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = tagColor,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                        )
+                                    }
                                 }
 
                                 if (showDateBadge) {
@@ -516,7 +565,17 @@ fun ScheduleItemCard(
                                     ),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                if (schedule.isCompleted) {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = schedule.isCompleted,
+                                    enter = scaleIn(
+                                        initialScale = 0.55f,
+                                        animationSpec = FlowMotion.playfulSpring(),
+                                    ) + fadeIn(tween(150)),
+                                    exit = scaleOut(
+                                        targetScale = 0.55f,
+                                        animationSpec = tween(120),
+                                    ) + fadeOut(tween(120)),
+                                ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Check,
                                         contentDescription = null,
@@ -529,7 +588,11 @@ fun ScheduleItemCard(
                     }
 
                     // Subtle inline fluid progress hairline for actively running schedules
-                    if (isInProgress) {
+                    AnimatedVisibility(
+                        visible = isInProgress,
+                        enter = expandVertically(animationSpec = FlowMotion.standardSpring()) + fadeIn(tween(200)),
+                        exit = shrinkVertically(animationSpec = FlowMotion.standardSpring()) + fadeOut(tween(160)),
+                    ) {
                         val progress = schedule.uiProgressFraction(nowMillis).coerceIn(0.04f, 1f)
                         Box(
                             modifier = Modifier

@@ -19,6 +19,7 @@ import com.example.data.TimetableRepository
 import com.example.data.UserPreferencesRepository
 import com.example.data.WeekStartDay
 import com.example.data.WeekType
+import com.example.notification.BackgroundKeepAliveHelper
 import com.example.notification.LiveUpdateCoordinator
 import com.example.notification.ScheduleGuardService
 import com.example.notification.ScheduleGuardWorkScheduler
@@ -46,6 +47,7 @@ data class TimetableUiState(
     val viewMode: TimetableViewMode = TimetableViewMode.WEEK,
     val settings: AppSettings = AppSettings(),
     val nowMillis: Long = System.currentTimeMillis(),
+    val reReminderVersion: Int = 0,
 ) {
     val isViewingCurrentWeek: Boolean
         get() = displayedWeek == currentActualWeek
@@ -113,6 +115,7 @@ class TimetableViewModel(
     private val _selectedWeekOverride = MutableStateFlow<Int?>(null)
     private val _selectedDateMillis = MutableStateFlow(DateTimeUtils.startOfDayMillis(System.currentTimeMillis()))
     private val _viewMode = MutableStateFlow(TimetableViewMode.WEEK)
+    private val _reReminderVersion = MutableStateFlow(0)
     private val _toastMessage = MutableStateFlow<String?>(null)
     val toastMessage: StateFlow<String?> = _toastMessage
 
@@ -121,8 +124,9 @@ class TimetableViewModel(
         _selectedWeekOverride,
         _selectedDateMillis,
         _viewMode,
-    ) { settings, weekOverride, selectedDate, mode ->
-        Quad(settings, weekOverride, selectedDate, mode)
+        _reReminderVersion,
+    ) { settings, weekOverride, selectedDate, mode, reReminderVer ->
+        ViewControlState(settings, weekOverride, selectedDate, mode, reReminderVer)
     }
 
     val uiState: StateFlow<TimetableUiState> = combine(
@@ -131,7 +135,11 @@ class TimetableViewModel(
         timetableRepository.activeCourses,
         timetableRepository.activeSectionTimes,
         viewControlFlow,
-    ) { allTimetables, activeTimetable, courses, sectionTimes, (settings, weekOverride, selectedDate, viewMode) ->
+    ) { allTimetables, activeTimetable, courses, sectionTimes, control ->
+        val settings = control.settings
+        val weekOverride = control.weekOverride
+        val selectedDate = control.selectedDate
+        val viewMode = control.viewMode
         val now = System.currentTimeMillis()
         val tt = activeTimetable ?: allTimetables.firstOrNull()
         val totalWeeks = (tt?.totalWeeks ?: 20).coerceAtLeast(1)
@@ -167,6 +175,7 @@ class TimetableViewModel(
             viewMode = viewMode,
             settings = settings,
             nowMillis = now,
+            reReminderVersion = control.reReminderVersion,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -174,7 +183,13 @@ class TimetableViewModel(
         initialValue = TimetableUiState(),
     )
 
-    private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+    private data class ViewControlState(
+        val settings: AppSettings,
+        val weekOverride: Int?,
+        val selectedDate: Long,
+        val viewMode: TimetableViewMode,
+        val reReminderVersion: Int,
+    )
 
     init {
         viewModelScope.launch {
@@ -341,6 +356,60 @@ class TimetableViewModel(
             }
             emitMessage(if (existingId == 0L) "已添加课程「$trimmed」" else "已更新课程「$trimmed」")
         }
+    }
+
+    fun moveCourseToDay(course: CourseEntity, targetDayOfWeek: Int) {
+        val safeDay = targetDayOfWeek.coerceIn(1, 7)
+        viewModelScope.launch {
+            if (safeDay >= 6 && !uiState.value.settings.showWeekend) {
+                preferencesRepository.setShowWeekend(true)
+            }
+            timetableRepository.moveCourseToDay(course, safeDay)
+            emitMessage("已将「${course.name}」移至${DateTimeUtils.dayOfWeekFullChinese(safeDay)}")
+        }
+    }
+
+    fun moveCourseToDate(course: CourseEntity, targetDateMillis: Long) {
+        val targetDay = DateTimeUtils.isoDayOfWeek(targetDateMillis)
+        viewModelScope.launch {
+            if (targetDay >= 6 && !uiState.value.settings.showWeekend) {
+                preferencesRepository.setShowWeekend(true)
+            }
+            timetableRepository.moveCourseToDay(course, targetDay)
+            emitMessage(
+                "已将「${course.name}」移至${DateTimeUtils.dayOfWeekFullChinese(targetDay)}（${DateTimeUtils.formatMonthDay(targetDateMillis)}）",
+            )
+        }
+    }
+
+    fun updateCourseColor(course: CourseEntity, colorIndex: Int, customColorHex: String = "") {
+        viewModelScope.launch {
+            val sameNameSiblings = uiState.value.courses.filter {
+                it.timetableId == course.timetableId &&
+                    it.id != course.id &&
+                    it.name.trim() == course.name.trim()
+            }
+            timetableRepository.updateCourseColor(course, sameNameSiblings, colorIndex, customColorHex)
+            val styleName = CourseColorPalette.resolveStyle(colorIndex, customColorHex).name
+            emitMessage("已将「${course.name}」标签色设为「$styleName」")
+        }
+    }
+
+    fun scheduleCourseReReminder(course: CourseEntity, delayMinutes: Int) {
+        val safeMinutes = delayMinutes.coerceIn(1, 720)
+        val triggerAt = timetableRepository.scheduleCourseReReminder(course, safeMinutes)
+        _reReminderVersion.value += 1
+        emitMessage("已设 ${DateTimeUtils.formatTime(triggerAt)}「${course.name}」重提醒闹钟")
+    }
+
+    fun cancelCourseReReminder(course: CourseEntity) {
+        timetableRepository.cancelCourseReReminder(course.id)
+        _reReminderVersion.value += 1
+        emitMessage("已取消「${course.name}」重提醒")
+    }
+
+    fun getCourseReReminderMillis(courseId: Long): Long? {
+        return timetableRepository.getCourseReReminderMillis(courseId)
     }
 
     fun deleteCourse(course: CourseEntity) {
@@ -571,6 +640,20 @@ class TimetableViewModel(
         }
     }
 
+    fun setExcludeFromRecents(enabled: Boolean, context: Context) {
+        BackgroundKeepAliveHelper.applyExcludeFromRecents(context, enabled)
+        viewModelScope.launch {
+            preferencesRepository.setExcludeFromRecents(enabled)
+            emitMessage(
+                if (enabled) {
+                    "已开启从最近任务隐藏，可通过桌面图标、快捷瓷贴或通知栏回到应用"
+                } else {
+                    "已恢复在最近任务中显示微澜日程"
+                },
+            )
+        }
+    }
+
     // --- Import / Export / Share ---
     fun importCsvText(rawText: String, replaceExisting: Boolean) {
         viewModelScope.launch {
@@ -715,6 +798,12 @@ class TimetableViewModel(
                 preferencesRepository = preferencesRepository,
                 liveUpdateCoordinator = liveUpdateCoordinator,
             ) as T
+        }
+    }
+
+    companion object {
+        fun applyCourseDayMove(course: CourseEntity, targetDayOfWeek: Int): CourseEntity {
+            return course.copy(dayOfWeek = targetDayOfWeek.coerceIn(1, 7))
         }
     }
 }

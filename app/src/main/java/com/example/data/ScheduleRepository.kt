@@ -67,8 +67,34 @@ class ScheduleRepository(
         )
     }
 
+    suspend fun updateScheduleQuick(schedule: ScheduleEntity) {
+        alarmScheduler.cancelAlarmsForSchedule(schedule.id)
+        dao.updateSchedule(schedule.copy(dismissedLiveUpdate = false))
+        liveUpdateCoordinator.syncAll(rescheduleAlarms = true)
+    }
+
+    fun scheduleCustomReReminder(schedule: ScheduleEntity, delayMinutes: Int): Long {
+        val timeLabel = DateTimeUtils.formatTimeRange(schedule.startTimeMillis, schedule.endTimeMillis)
+        return alarmScheduler.scheduleCustomReReminder(
+            isCourse = false,
+            itemId = schedule.id,
+            title = "日程重提醒 · ${schedule.title}",
+            subtitle = "$timeLabel · 点击回到微澜日程查看详情",
+            delayMinutes = delayMinutes,
+        )
+    }
+
+    fun cancelCustomReReminder(scheduleId: Long) {
+        alarmScheduler.cancelCustomReReminder(isCourse = false, itemId = scheduleId)
+    }
+
+    fun getCustomReReminderMillis(scheduleId: Long): Long? {
+        return alarmScheduler.getActiveReReminderMillis(isCourse = false, itemId = scheduleId)
+    }
+
     suspend fun deleteSchedule(schedule: ScheduleEntity) {
         alarmScheduler.cancelAlarmsForSchedule(schedule.id)
+        alarmScheduler.cancelCustomReReminder(isCourse = false, itemId = schedule.id)
         dao.deleteById(schedule.id)
         liveUpdateCoordinator.syncAll(rescheduleAlarms = false)
     }

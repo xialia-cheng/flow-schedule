@@ -1422,6 +1422,225 @@ class ExampleRobolectricTest {
         val result = kotlinx.coroutines.runBlocking { worker.doWork() }
         assertEquals(androidx.work.ListenableWorker.Result.success(), result)
     }
+
+    @Test
+    fun `background keep alive helper detects OEM brands and exposes candidate auto-start intents`() {
+        val defaults = com.example.data.AppSettings()
+        assertFalse(defaults.excludeFromRecents)
+
+        assertEquals(
+            com.example.notification.OemBrand.COLOR_OS,
+            com.example.notification.BackgroundKeepAliveHelper.detectOemBrand("OPPO", "OPPO"),
+        )
+        assertEquals(
+            com.example.notification.OemBrand.COLOR_OS,
+            com.example.notification.BackgroundKeepAliveHelper.detectOemBrand("OnePlus", "OnePlus"),
+        )
+        assertEquals(
+            com.example.notification.OemBrand.COLOR_OS,
+            com.example.notification.BackgroundKeepAliveHelper.detectOemBrand("realme", "realme"),
+        )
+        assertEquals(
+            com.example.notification.OemBrand.HYPER_OS,
+            com.example.notification.BackgroundKeepAliveHelper.detectOemBrand("Xiaomi", "Redmi"),
+        )
+        assertEquals(
+            com.example.notification.OemBrand.ORIGIN_OS,
+            com.example.notification.BackgroundKeepAliveHelper.detectOemBrand("vivo", "iQOO"),
+        )
+        assertEquals(
+            com.example.notification.OemBrand.HARMONY_OS,
+            com.example.notification.BackgroundKeepAliveHelper.detectOemBrand("HUAWEI", "HUAWEI"),
+        )
+        assertEquals(
+            com.example.notification.OemBrand.HARMONY_OS,
+            com.example.notification.BackgroundKeepAliveHelper.detectOemBrand("HONOR", "HONOR"),
+        )
+        assertEquals(
+            com.example.notification.OemBrand.GENERIC,
+            com.example.notification.BackgroundKeepAliveHelper.detectOemBrand("Google", "Pixel"),
+        )
+
+        val colorOsTargets = com.example.notification.BackgroundKeepAliveHelper.candidateAutoStartComponents(
+            com.example.notification.OemBrand.COLOR_OS,
+        )
+        assertTrue(colorOsTargets.any { it.first == "com.oplus.safecenter" })
+        assertTrue(colorOsTargets.any { it.first == "com.coloros.safecenter" })
+        assertTrue(colorOsTargets.any { it.first == "com.oppo.safe" })
+
+        val hyperOsTargets = com.example.notification.BackgroundKeepAliveHelper.candidateAutoStartComponents(
+            com.example.notification.OemBrand.HYPER_OS,
+        )
+        assertTrue(hyperOsTargets.any { it.second.endsWith("AutoStartManagementActivity") })
+
+        val originOsTargets = com.example.notification.BackgroundKeepAliveHelper.candidateAutoStartComponents(
+            com.example.notification.OemBrand.ORIGIN_OS,
+        )
+        assertTrue(originOsTargets.any { it.first == "com.iqoo.secure" })
+        assertTrue(originOsTargets.any { it.first == "com.vivo.permissionmanager" })
+
+        val harmonyTargets = com.example.notification.BackgroundKeepAliveHelper.candidateAutoStartComponents(
+            com.example.notification.OemBrand.HARMONY_OS,
+        )
+        assertTrue(harmonyTargets.any { it.first == "com.huawei.systemmanager" })
+
+        assertTrue(
+            com.example.notification.BackgroundKeepAliveHelper.oemKeepAliveGuideText(
+                com.example.notification.OemBrand.COLOR_OS,
+            ).contains("允许自启动"),
+        )
+    }
+
+    @Test
+    fun `custom schedule tag iconKey encodes decodes preserves legacy json and resolves icons`() {
+        val customWithIcon = com.example.data.CustomScheduleTag(
+            id = "tag_study",
+            name = "科研文献",
+            colorHex = "#3B82F6",
+            iconKey = "study",
+        )
+        val encoded = com.example.data.CustomScheduleTagCodec.encode(listOf(customWithIcon))
+        val decoded = com.example.data.CustomScheduleTagCodec.decode(encoded)
+        assertEquals(listOf(customWithIcon), decoded)
+
+        // Legacy JSON without iconKey should default cleanly to "label"
+        val legacyJson = """[{"id":"tag_legacy","name":"社团","colorHex":"#0D9488"}]"""
+        val decodedLegacy = com.example.data.CustomScheduleTagCodec.decode(legacyJson)
+        assertEquals(1, decodedLegacy.size)
+        assertEquals("label", decodedLegacy.first().iconKey)
+
+        // ScheduleEntity resolves custom tag icon or falls back to built-in category icon
+        val customSchedule = ScheduleEntity(
+            id = 1L,
+            title = "精读论文",
+            startTimeMillis = 1_795_000_000_000L,
+            endTimeMillis = 1_795_003_600_000L,
+            category = com.example.data.ScheduleCategory.WORK,
+            customTagId = "tag_study",
+        )
+        assertEquals(
+            com.example.data.TagIconCatalog.iconForKey("study"),
+            customSchedule.resolvedTagIcon(decoded),
+        )
+
+        val builtInSchedule = ScheduleEntity(
+            id = 2L,
+            title = "夜跑 5 公里",
+            startTimeMillis = 1_795_000_000_000L,
+            endTimeMillis = 1_795_003_600_000L,
+            category = com.example.data.ScheduleCategory.HEALTH,
+        )
+        assertEquals(
+            com.example.data.TagIconCatalog.iconForCategory(com.example.data.ScheduleCategory.HEALTH),
+            builtInSchedule.resolvedTagIcon(decoded),
+        )
+    }
+
+    @Test
+    fun `schedule quick move preserves time of day and duration while updating date`() {
+        val srcCal = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 18, 14, 30, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val dstCal = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 25, 0, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val original = ScheduleEntity(
+            id = 42L,
+            title = "导师周会",
+            startTimeMillis = srcCal.timeInMillis,
+            endTimeMillis = srcCal.timeInMillis + 90 * 60_000L,
+            category = com.example.data.ScheduleCategory.MEETING,
+            dismissedLiveUpdate = true,
+        )
+        val moved = com.example.ui.ScheduleViewModel.shiftScheduleToDate(original, dstCal.timeInMillis)
+        val movedStart = Calendar.getInstance().apply { timeInMillis = moved.startTimeMillis }
+        assertEquals(2026, movedStart.get(Calendar.YEAR))
+        assertEquals(Calendar.NOVEMBER, movedStart.get(Calendar.MONTH))
+        assertEquals(25, movedStart.get(Calendar.DAY_OF_MONTH))
+        assertEquals(14, movedStart.get(Calendar.HOUR_OF_DAY))
+        assertEquals(30, movedStart.get(Calendar.MINUTE))
+        assertEquals(90 * 60_000L, moved.endTimeMillis - moved.startTimeMillis)
+        assertFalse(moved.dismissedLiveUpdate)
+    }
+
+    @Test
+    fun `schedule quick tag switch and course weekday move work accurately`() {
+        val original = ScheduleEntity(
+            id = 7L,
+            title = "阅读笔记",
+            startTimeMillis = 1_795_000_000_000L,
+            endTimeMillis = 1_795_003_600_000L,
+            category = com.example.data.ScheduleCategory.WORK,
+        )
+        val custom = com.example.data.CustomScheduleTag(
+            id = "tag_1",
+            name = "论文",
+            colorHex = "#6366F1",
+            iconKey = "study",
+        )
+        val withCustom = com.example.ui.ScheduleViewModel.applyScheduleTag(
+            original,
+            com.example.data.ScheduleCategory.WORK,
+            custom,
+        )
+        assertEquals("tag_1", withCustom.customTagId)
+        assertEquals("论文", withCustom.customTagName)
+        assertEquals("#6366F1", withCustom.customTagColorHex)
+
+        val backToBuiltIn = com.example.ui.ScheduleViewModel.applyScheduleTag(
+            withCustom,
+            com.example.data.ScheduleCategory.HEALTH,
+            null,
+        )
+        assertEquals(com.example.data.ScheduleCategory.HEALTH, backToBuiltIn.category)
+        assertEquals("", backToBuiltIn.customTagId)
+
+        val course = CourseEntity(
+            id = 9L,
+            timetableId = 1L,
+            name = "软件工程",
+            dayOfWeek = 1,
+            startSection = 3,
+            endSection = 4,
+        )
+        val movedCourse = com.example.ui.timetable.TimetableViewModel.applyCourseDayMove(course, 5)
+        assertEquals(5, movedCourse.dayOfWeek)
+        assertEquals(1, com.example.ui.timetable.TimetableViewModel.applyCourseDayMove(course, 0).dayOfWeek)
+        assertEquals(7, com.example.ui.timetable.TimetableViewModel.applyCourseDayMove(course, 99).dayOfWeek)
+    }
+
+    @Test
+    fun `custom re-reminder alarm stores active timestamp and cancels cleanly`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scheduler = com.example.notification.ScheduleAlarmScheduler(context)
+        val now = 1_795_000_000_000L
+        val triggerAt = scheduler.scheduleCustomReReminder(
+            isCourse = false,
+            itemId = 101L,
+            title = "测试重提醒",
+            subtitle = "10分钟后",
+            delayMinutes = 10,
+            nowMillis = now,
+        )
+        assertEquals(now + 10 * 60_000L, triggerAt)
+        assertEquals(triggerAt, scheduler.getActiveReReminderMillis(isCourse = false, itemId = 101L, nowMillis = now))
+        // Once time passes triggerAt, active query clears and returns null
+        assertNull(scheduler.getActiveReReminderMillis(isCourse = false, itemId = 101L, nowMillis = triggerAt + 1_000L))
+
+        val courseTrigger = scheduler.scheduleCustomReReminder(
+            isCourse = true,
+            itemId = 55L,
+            title = "课程重提醒",
+            subtitle = "周三 第1-2节",
+            delayMinutes = 30,
+            nowMillis = now,
+        )
+        assertEquals(courseTrigger, scheduler.getActiveReReminderMillis(isCourse = true, itemId = 55L, nowMillis = now))
+        scheduler.cancelCustomReReminder(isCourse = true, itemId = 55L)
+        assertNull(scheduler.getActiveReReminderMillis(isCourse = true, itemId = 55L, nowMillis = now))
+    }
 }
 
 

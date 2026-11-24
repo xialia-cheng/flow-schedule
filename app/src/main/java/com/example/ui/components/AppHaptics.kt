@@ -42,6 +42,15 @@ class AppHaptics(
         }
     }
 
+    /**
+     * Distinct tactile feedback when opening a long-press contextual menu.
+     */
+    fun longPress() {
+        if (enabled) {
+            performAction(HapticFeedbackConstants.LONG_PRESS)
+        }
+    }
+
     companion object {
         fun resolveTickConstant(): Int = HapticFeedbackConstants.CLOCK_TICK
 

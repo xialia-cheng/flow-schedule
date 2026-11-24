@@ -14,13 +14,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.example.data.AppThemeMode
+import com.example.notification.BackgroundKeepAliveHelper
 import com.example.notification.LiveActivitySourceType
 import com.example.notification.LiveUpdateManager
 import com.example.notification.ScheduleGuardService
@@ -33,6 +36,8 @@ import com.example.ui.theme.FlowScheduleTheme
 import com.example.ui.timetable.TimetableViewModel
 import com.example.ui.update.AppUpdateViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -90,11 +95,19 @@ class MainActivity : ComponentActivity() {
         }
         handleDeepLinkIntent(intent)
 
-        val liveUpdateManager = (application as ScheduleApp).container.liveUpdateManager
+        val container = (application as ScheduleApp).container
+        val liveUpdateManager = container.liveUpdateManager
+        lifecycleScope.launch {
+            val initialExclude = runCatching {
+                container.preferencesRepository.settings.first().excludeFromRecents
+            }.getOrDefault(false)
+            BackgroundKeepAliveHelper.applyExcludeFromRecents(this@MainActivity, initialExclude)
+        }
 
         setContent {
             val themeMode by scheduleViewModel.themeMode.collectAsStateWithLifecycle()
             val useDynamicColor by scheduleViewModel.useDynamicColor.collectAsStateWithLifecycle()
+            val timetableState by timetableViewModel.uiState.collectAsStateWithLifecycle()
             val pendingDeepLink by deepLinkTab.collectAsStateWithLifecycle()
             val systemDark = isSystemInDarkTheme()
             val useDarkTheme = when (themeMode) {
@@ -137,11 +150,23 @@ class MainActivity : ComponentActivity() {
                     scheduleViewModel.onResumeRefresh()
                 }
 
+                LaunchedEffect(timetableState.settings.excludeFromRecents) {
+                    BackgroundKeepAliveHelper.applyExcludeFromRecents(
+                        this@MainActivity,
+                        timetableState.settings.excludeFromRecents,
+                    )
+                }
+
                 DisposableEffect(lifecycleOwner) {
                     val observer = LifecycleEventObserver { _, event ->
                         if (event == Lifecycle.Event.ON_RESUME) {
                             scheduleViewModel.onResumeRefresh()
-                            if (timetableViewModel.uiState.value.settings.backgroundGuardEnabled && !ScheduleGuardService.isRunning) {
+                            val currentSettings = timetableViewModel.uiState.value.settings
+                            BackgroundKeepAliveHelper.applyExcludeFromRecents(
+                                this@MainActivity,
+                                currentSettings.excludeFromRecents,
+                            )
+                            if (currentSettings.backgroundGuardEnabled && !ScheduleGuardService.isRunning) {
                                 ScheduleGuardService.tryStart(context)
                             }
                         }

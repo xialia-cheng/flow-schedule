@@ -70,6 +70,7 @@ import com.example.data.DateTimeUtils
 import com.example.data.RepeatRule
 import com.example.data.ScheduleCategory
 import com.example.data.ScheduleEntity
+import com.example.data.TagIconCatalog
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 import java.util.Calendar
@@ -88,8 +89,8 @@ private val ReminderOptions = listOf(
 fun ScheduleEditorSheet(
     editingSchedule: ScheduleEntity?,
     customTags: List<CustomScheduleTag> = emptyList(),
-    onAddCustomTag: (name: String, colorHex: String) -> Unit = { _, _ -> },
-    onUpdateCustomTag: (id: String, name: String, colorHex: String) -> Unit = { _, _, _ -> },
+    onAddCustomTag: (name: String, colorHex: String, iconKey: String) -> Unit = { _, _, _ -> },
+    onUpdateCustomTag: (id: String, name: String, colorHex: String, iconKey: String) -> Unit = { _, _, _, _ -> },
     onDeleteCustomTag: (id: String) -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (
@@ -305,10 +306,18 @@ fun ScheduleEditorSheet(
                                 selectedCustomTagId = null
                                 category = cat
                             },
-                            label = { Text(cat.label) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = TagIconCatalog.iconForCategory(cat),
+                                    contentDescription = null,
+                                    tint = if (selected) cat.accentColor else colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                            },
+                            label = { Text(cat.label, maxLines = 1, softWrap = false) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = cat.accentColor.copy(
-                                    alpha = if (flowColors.isDark) 0.22f else 0.14f,
+                                    alpha = if (flowColors.isDark) 0.18f else 0.12f,
                                 ),
                                 selectedLabelColor = cat.accentColor,
                             ),
@@ -316,7 +325,7 @@ fun ScheduleEditorSheet(
                                 enabled = true,
                                 selected = selected,
                                 borderColor = colorScheme.outlineVariant,
-                                selectedBorderColor = cat.accentColor.copy(alpha = 0.6f),
+                                selectedBorderColor = cat.accentColor.copy(alpha = 0.55f),
                             ),
                         )
                     }
@@ -331,18 +340,18 @@ fun ScheduleEditorSheet(
                             selectedCustomTagId = tag.id
                         },
                         leadingIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(tagColor),
+                            Icon(
+                                imageVector = tag.resolvedIcon(),
+                                contentDescription = null,
+                                tint = tagColor,
+                                modifier = Modifier.size(15.dp),
                             )
                         },
-                        label = { Text(tag.name) },
+                        label = { Text(tag.name, maxLines = 1, softWrap = false) },
                         modifier = Modifier.testTag("editor_custom_tag_${tag.id}"),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = tagColor.copy(
-                                alpha = if (flowColors.isDark) 0.24f else 0.15f,
+                                alpha = if (flowColors.isDark) 0.18f else 0.12f,
                             ),
                             selectedLabelColor = tagColor,
                         ),
@@ -350,7 +359,7 @@ fun ScheduleEditorSheet(
                             enabled = true,
                             selected = selected,
                             borderColor = colorScheme.outlineVariant,
-                            selectedBorderColor = tagColor.copy(alpha = 0.65f),
+                            selectedBorderColor = tagColor.copy(alpha = 0.55f),
                         ),
                     )
                 }

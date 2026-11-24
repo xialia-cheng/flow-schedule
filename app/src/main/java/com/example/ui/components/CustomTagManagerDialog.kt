@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -53,60 +54,107 @@ import androidx.compose.ui.unit.dp
 import com.example.data.CourseColorPalette
 import com.example.data.CustomScheduleTag
 import com.example.data.CustomScheduleTagCodec
+import com.example.data.TagIconCatalog
+import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CustomTagManagerDialog(
     customTags: List<CustomScheduleTag>,
-    onAddTag: (name: String, colorHex: String) -> Unit,
-    onUpdateTag: (id: String, name: String, colorHex: String) -> Unit,
+    onAddTag: (name: String, colorHex: String, iconKey: String) -> Unit,
+    onUpdateTag: (id: String, name: String, colorHex: String, iconKey: String) -> Unit,
     onDeleteTag: (id: String) -> Unit,
     onDismiss: () -> Unit,
+    initialEditingTagId: String? = null,
     onSelectTag: ((CustomScheduleTag) -> Unit)? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val flowColors = FlowTheme.colors
     val haptics = rememberAppHaptics()
-    var editingTagId by remember { mutableStateOf<String?>(null) }
-    var nameInput by remember { mutableStateOf("") }
-    var selectedHex by remember { mutableStateOf(CustomScheduleTagCodec.presetColorHexes.first()) }
-    var hexText by remember { mutableStateOf(CustomScheduleTagCodec.presetColorHexes.first()) }
+
+    val initialTag = remember(initialEditingTagId, customTags) {
+        initialEditingTagId?.let { id -> customTags.firstOrNull { it.id == id } }
+    }
+    var editingTagId by remember(initialEditingTagId) { mutableStateOf(initialTag?.id) }
+    var nameInput by remember(initialEditingTagId) { mutableStateOf(initialTag?.name.orEmpty()) }
+    var selectedHex by remember(initialEditingTagId) {
+        mutableStateOf(initialTag?.colorHex ?: CustomScheduleTagCodec.presetColorHexes.first())
+    }
+    var selectedIconKey by remember(initialEditingTagId) {
+        mutableStateOf(initialTag?.iconKey ?: TagIconCatalog.options.first().key)
+    }
+    var hexText by remember(initialEditingTagId) {
+        mutableStateOf(initialTag?.colorHex ?: CustomScheduleTagCodec.presetColorHexes.first())
+    }
     var hexError by remember { mutableStateOf(false) }
+    var showCustomHexField by remember { mutableStateOf(false) }
 
     val resolvedPreviewColor = CourseColorPalette.parseHexColorOrNull(selectedHex)
         ?: colorScheme.primary
+    val resolvedPreviewIcon = TagIconCatalog.iconForKey(selectedIconKey)
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = colorScheme.surfaceContainerHigh,
         title = {
-            Text(
-                text = if (editingTagId == null) "管理自定义标签" else "编辑自定义标签",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = if (editingTagId == null) "自定义日程标签" else "编辑日程标签",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = resolvedPreviewColor.copy(alpha = if (flowColors.isDark) 0.18f else 0.11f),
+                    border = BorderStroke(1.dp, resolvedPreviewColor.copy(alpha = 0.35f)),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = resolvedPreviewIcon,
+                            contentDescription = null,
+                            tint = resolvedPreviewColor,
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Text(
+                            text = nameInput.trim().ifEmpty { "标签预览" },
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = resolvedPreviewColor,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
         },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 460.dp)
+                    .heightIn(max = 470.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // Input form: tag name
                 OutlinedTextField(
                     value = nameInput,
-                    onValueChange = { if (it.length <= 14) nameInput = it },
-                    label = { Text(if (editingTagId == null) "新建标签名称" else "标签名称") },
-                    placeholder = { Text("例如：社团、考研、实验、兼职") },
+                    onValueChange = { if (it.length <= 12) nameInput = it },
+                    label = { Text(if (editingTagId == null) "标签名称" else "修改名称") },
+                    placeholder = { Text("例如：科研、社团、备考、兼职") },
                     singleLine = true,
                     leadingIcon = {
-                        Box(
-                            modifier = Modifier
-                                .size(14.dp)
-                                .clip(CircleShape)
-                                .background(resolvedPreviewColor),
+                        Icon(
+                            imageVector = resolvedPreviewIcon,
+                            contentDescription = null,
+                            tint = resolvedPreviewColor,
+                            modifier = Modifier.size(18.dp),
                         )
                     },
                     modifier = Modifier
@@ -115,13 +163,77 @@ fun CustomTagManagerDialog(
                     shape = MaterialTheme.shapes.medium,
                 )
 
-                // Color presets + custom Hex input
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Restrained icon picker (10 minimal Material icons)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "选择标签颜色",
+                        text = "选择图标",
                         style = MaterialTheme.typography.labelMedium,
                         color = colorScheme.onSurfaceVariant,
                     )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TagIconCatalog.options.forEach { option ->
+                            val isSelected = selectedIconKey == option.key
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelected) {
+                                    resolvedPreviewColor.copy(alpha = if (flowColors.isDark) 0.22f else 0.13f)
+                                } else {
+                                    colorScheme.surface
+                                },
+                                border = BorderStroke(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) resolvedPreviewColor else colorScheme.outlineVariant,
+                                ),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        haptics.tick()
+                                        selectedIconKey = option.key
+                                    }
+                                    .testTag("custom_tag_icon_${option.key}"),
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = option.icon,
+                                        contentDescription = option.label,
+                                        tint = if (isSelected) resolvedPreviewColor else colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Curated 8-color restrained palette + optional custom hex toggle
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "选择主题色",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(
+                            onClick = {
+                                haptics.tick()
+                                showCustomHexField = !showCustomHexField
+                            },
+                            modifier = Modifier.height(28.dp),
+                        ) {
+                            Text(
+                                text = if (showCustomHexField) "收起色值" else "自定义色值",
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -131,12 +243,12 @@ fun CustomTagManagerDialog(
                             val isSelected = selectedHex.equals(hex, ignoreCase = true)
                             Box(
                                 modifier = Modifier
-                                    .size(32.dp)
+                                    .size(30.dp)
                                     .clip(CircleShape)
                                     .background(color)
                                     .border(
                                         width = if (isSelected) 2.5.dp else 1.dp,
-                                        color = if (isSelected) colorScheme.onSurface else Color.White.copy(alpha = 0.5f),
+                                        color = if (isSelected) colorScheme.onSurface else Color.White.copy(alpha = 0.45f),
                                         shape = CircleShape,
                                     )
                                     .clickable {
@@ -153,38 +265,40 @@ fun CustomTagManagerDialog(
                                         imageVector = Icons.Rounded.Check,
                                         contentDescription = "已选颜色",
                                         tint = Color.White,
-                                        modifier = Modifier.size(16.dp),
+                                        modifier = Modifier.size(15.dp),
                                     )
                                 }
                             }
                         }
                     }
 
-                    OutlinedTextField(
-                        value = hexText,
-                        onValueChange = { raw ->
-                            val cleaned = raw.trim().uppercase()
-                            if (cleaned.length <= 7) {
-                                hexText = cleaned
-                                val parsed = CourseColorPalette.parseHexColorOrNull(cleaned)
-                                if (parsed != null) {
-                                    selectedHex = CourseColorPalette.formatHex(parsed)
-                                    hexError = false
-                                } else {
-                                    hexError = cleaned.length >= 6
+                    AnimatedVisibility(visible = showCustomHexField) {
+                        OutlinedTextField(
+                            value = hexText,
+                            onValueChange = { raw ->
+                                val cleaned = raw.trim().uppercase()
+                                if (cleaned.length <= 7) {
+                                    hexText = cleaned
+                                    val parsed = CourseColorPalette.parseHexColorOrNull(cleaned)
+                                    if (parsed != null) {
+                                        selectedHex = CourseColorPalette.formatHex(parsed)
+                                        hexError = false
+                                    } else {
+                                        hexError = cleaned.length >= 6
+                                    }
                                 }
-                            }
-                        },
-                        label = { Text("自定义 Hex 色值") },
-                        placeholder = { Text("#0B72FF") },
-                        singleLine = true,
-                        isError = hexError,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = MonoFontFamily),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("custom_tag_hex_input"),
-                        shape = MaterialTheme.shapes.medium,
-                    )
+                            },
+                            label = { Text("自定义 Hex 色值") },
+                            placeholder = { Text("#3B82F6") },
+                            singleLine = true,
+                            isError = hexError,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = MonoFontFamily),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("custom_tag_hex_input"),
+                            shape = MaterialTheme.shapes.medium,
+                        )
+                    }
                 }
 
                 // Submit / Cancel edit buttons
@@ -199,6 +313,7 @@ fun CustomTagManagerDialog(
                                 editingTagId = null
                                 nameInput = ""
                                 selectedHex = CustomScheduleTagCodec.presetColorHexes.first()
+                                selectedIconKey = TagIconCatalog.options.first().key
                                 hexText = selectedHex
                                 hexError = false
                             },
@@ -217,12 +332,13 @@ fun CustomTagManagerDialog(
                                 ?: CustomScheduleTagCodec.presetColorHexes.first()
                             val currentEditId = editingTagId
                             if (currentEditId != null) {
-                                onUpdateTag(currentEditId, trimmed, validHex)
+                                onUpdateTag(currentEditId, trimmed, validHex, selectedIconKey)
                                 editingTagId = null
                             } else {
-                                onAddTag(trimmed, validHex)
+                                onAddTag(trimmed, validHex, selectedIconKey)
                             }
                             nameInput = ""
+                            selectedIconKey = TagIconCatalog.options.first().key
                             hexError = false
                         },
                         enabled = nameInput.isNotBlank() && !hexError,
@@ -250,7 +366,7 @@ fun CustomTagManagerDialog(
 
                 if (customTags.isEmpty()) {
                     Text(
-                        text = "暂无自定义标签，可在上方输入名称与颜色一键创建",
+                        text = "暂无自定义标签，可在上方设置名称、图标与颜色后添加",
                         style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.onSurfaceVariant,
                     )
@@ -288,10 +404,18 @@ fun CustomTagManagerDialog(
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(12.dp)
-                                                .clip(CircleShape)
-                                                .background(tagColor),
-                                        )
+                                                .size(28.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(tagColor.copy(alpha = if (flowColors.isDark) 0.18f else 0.11f)),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = tag.resolvedIcon(),
+                                                contentDescription = null,
+                                                tint = tagColor,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
                                         Text(
                                             text = tag.name,
                                             style = MaterialTheme.typography.bodyMedium,
@@ -308,6 +432,7 @@ fun CustomTagManagerDialog(
                                                 editingTagId = tag.id
                                                 nameInput = tag.name
                                                 selectedHex = tag.colorHex
+                                                selectedIconKey = tag.iconKey
                                                 hexText = tag.colorHex
                                                 hexError = false
                                             },

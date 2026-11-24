@@ -58,9 +58,11 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -94,11 +96,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.CustomScheduleTag
 import com.example.data.DateTimeUtils
+import com.example.data.ScheduleCategory
 import com.example.data.ScheduleEntity
+import com.example.data.TagIconCatalog
 import com.example.data.WeekStartDay
 import com.example.ui.components.CustomTagManagerDialog
 import com.example.ui.components.HeroLiveCard
-import com.example.ui.components.ScheduleEditorSheet
 import com.example.ui.components.ScheduleItemCard
 import com.example.ui.components.ScheduleListSectionHeader
 import com.example.ui.components.SmartCaptureFab
@@ -252,10 +255,13 @@ fun HomeScreen(
                         ScheduleTimelinePane(
                             state = state,
                             onSelectFilter = { viewModel.selectFilter(it) },
+                            onSelectTagFilter = { viewModel.selectTagFilter(it) },
+                            onResetTagFilter = { viewModel.resetTagFilter() },
                             onManageTags = { showCustomTagManager = true },
                             onToggleComplete = { viewModel.toggleComplete(it) },
                             onDelete = { viewModel.deleteSchedule(it) },
                             onEdit = { viewModel.openEditScheduleEditor(it) },
+                            onLongClick = { viewModel.openQuickActionMenu(it) },
                             modifier = Modifier
                                 .weight(0.55f)
                                 .fillMaxHeight(),
@@ -303,13 +309,19 @@ fun HomeScreen(
                         }
 
                         item(key = "filter_row") {
-                            FilterChipsRow(
-                                selected = state.selectedFilter,
-                                selectedDateMillis = state.selectedDateMillis,
-                                customTagCount = state.customTags.size,
-                                onSelect = { viewModel.selectFilter(it) },
-                                onManageTags = { showCustomTagManager = true },
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                FilterChipsRow(
+                                    selected = state.selectedFilter,
+                                    selectedDateMillis = state.selectedDateMillis,
+                                    onSelect = { viewModel.selectFilter(it) },
+                                )
+                                TagQuickFilterStrip(
+                                    selectedTagFilter = state.selectedTagFilter,
+                                    customTags = state.customTags,
+                                    onSelectTagFilter = { viewModel.selectTagFilter(it) },
+                                    onManageTags = { showCustomTagManager = true },
+                                )
+                            }
                         }
 
                         scheduleTimelineItems(
@@ -319,9 +331,12 @@ fun HomeScreen(
                             isDayScopedFilter = state.isDayScopedFilter,
                             showDateBadge = !state.isDayScopedFilter,
                             customTags = state.customTags,
+                            selectedTagFilter = state.selectedTagFilter,
+                            onResetTagFilter = { viewModel.resetTagFilter() },
                             onToggleComplete = { viewModel.toggleComplete(it) },
                             onDelete = { viewModel.deleteSchedule(it) },
                             onEdit = { viewModel.openEditScheduleEditor(it) },
+                            onLongClick = { viewModel.openQuickActionMenu(it) },
                         )
                     }
                 }
@@ -339,43 +354,11 @@ fun HomeScreen(
         }
     }
 
-    if (state.showEditorSheet) {
-        ScheduleEditorSheet(
-            editingSchedule = state.editingSchedule,
-            customTags = state.customTags,
-            onAddCustomTag = { name, hex -> viewModel.addCustomTag(name, hex) },
-            onUpdateCustomTag = { id, name, hex -> viewModel.updateCustomTag(id, name, hex) },
-            onDeleteCustomTag = { id -> viewModel.deleteCustomTag(id) },
-            onDismiss = { viewModel.dismissEditorSheet() },
-            onSave = { id, title, notes, start, end, repeat, lead, cat, customTagId, customTagName, customTagColorHex ->
-                viewModel.saveSchedule(
-                    existingId = id,
-                    title = title,
-                    notes = notes,
-                    startTimeMillis = start,
-                    endTimeMillis = end,
-                    repeatRule = repeat,
-                    reminderMinutesBefore = lead,
-                    category = cat,
-                    customTagId = customTagId,
-                    customTagName = customTagName,
-                    customTagColorHex = customTagColorHex,
-                )
-            },
-            onDelete = if (state.editingSchedule != null) {
-                { viewModel.deleteSchedule(it) }
-            } else {
-                null
-            },
-            onOpenSmartCapture = onOpenSmartCapture,
-        )
-    }
-
     if (showCustomTagManager) {
         CustomTagManagerDialog(
             customTags = state.customTags,
-            onAddTag = { name, hex -> viewModel.addCustomTag(name, hex) },
-            onUpdateTag = { id, name, hex -> viewModel.updateCustomTag(id, name, hex) },
+            onAddTag = { name, hex, iconKey -> viewModel.addCustomTag(name, hex, iconKey) },
+            onUpdateTag = { id, name, hex, iconKey -> viewModel.updateCustomTag(id, name, hex, iconKey) },
             onDeleteTag = { id -> viewModel.deleteCustomTag(id) },
             onDismiss = { showCustomTagManager = false },
         )
@@ -389,9 +372,12 @@ private fun LazyListScope.scheduleTimelineItems(
     isDayScopedFilter: Boolean,
     showDateBadge: Boolean,
     customTags: List<CustomScheduleTag>,
+    selectedTagFilter: ScheduleTagFilter,
+    onResetTagFilter: () -> Unit,
     onToggleComplete: (ScheduleEntity) -> Unit,
     onDelete: (ScheduleEntity) -> Unit,
     onEdit: (ScheduleEntity) -> Unit,
+    onLongClick: (ScheduleEntity) -> Unit,
 ) {
     if (groups.isEmpty()) {
         item(key = "empty_state") {
@@ -399,6 +385,14 @@ private fun LazyListScope.scheduleTimelineItems(
                 selectedDateMillis = selectedDateMillis,
                 nowMillis = nowMillis,
                 isDayScopedFilter = isDayScopedFilter,
+                selectedTagFilter = selectedTagFilter,
+                customTags = customTags,
+                onResetTagFilter = onResetTagFilter,
+                modifier = Modifier.animateItem(
+                    fadeInSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                    placementSpec = FlowMotion.standardSpring(),
+                    fadeOutSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                ),
             )
         }
         return
@@ -410,6 +404,11 @@ private fun LazyListScope.scheduleTimelineItems(
                 title = group.title,
                 count = group.items.size,
                 isCompletedGroup = group.isCompletedGroup,
+                modifier = Modifier.animateItem(
+                    fadeInSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                    placementSpec = FlowMotion.standardSpring(),
+                    fadeOutSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                ),
             )
         }
         itemsIndexed(
@@ -426,7 +425,12 @@ private fun LazyListScope.scheduleTimelineItems(
                 onToggleComplete = onToggleComplete,
                 onDelete = onDelete,
                 onClick = onEdit,
-                modifier = Modifier.animateItem(),
+                onLongClick = onLongClick,
+                modifier = Modifier.animateItem(
+                    fadeInSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                    placementSpec = FlowMotion.standardSpring(),
+                    fadeOutSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                ),
             )
         }
     }
@@ -953,9 +957,7 @@ private fun SectionTitleRow(
 private fun FilterChipsRow(
     selected: ScheduleFilter,
     selectedDateMillis: Long,
-    customTagCount: Int,
     onSelect: (ScheduleFilter) -> Unit,
-    onManageTags: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
@@ -1026,39 +1028,172 @@ private fun FilterChipsRow(
                 ),
             )
         }
-        FilterChip(
-            selected = false,
+    }
+}
+
+@Composable
+private fun TagQuickFilterStrip(
+    selectedTagFilter: ScheduleTagFilter,
+    customTags: List<CustomScheduleTag>,
+    onSelectTagFilter: (ScheduleTagFilter) -> Unit,
+    onManageTags: () -> Unit,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val isAll = selectedTagFilter == ScheduleTagFilter.All
+        Surface(
+            onClick = {
+                haptics.tick()
+                onSelectTagFilter(ScheduleTagFilter.All)
+            },
+            shape = CircleShape,
+            color = if (isAll) colorScheme.secondaryContainer else flowColors.cardElevated,
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (isAll) colorScheme.secondary.copy(alpha = 0.45f) else colorScheme.outlineVariant,
+            ),
+            modifier = Modifier.testTag("tag_filter_all"),
+        ) {
+            Text(
+                text = "全部标签",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (isAll) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (isAll) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+            )
+        }
+
+        customTags.forEach { tag ->
+            val targetFilter = ScheduleTagFilter.Custom(tag.id)
+            val isSelected = selectedTagFilter == targetFilter
+            val tagColor = tag.resolvedColor()
+            Surface(
+                onClick = {
+                    haptics.tick()
+                    onSelectTagFilter(targetFilter)
+                },
+                shape = CircleShape,
+                color = if (isSelected) {
+                    tagColor.copy(alpha = if (flowColors.isDark) 0.18f else 0.12f)
+                } else {
+                    flowColors.cardElevated
+                },
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = if (isSelected) tagColor.copy(alpha = 0.55f) else colorScheme.outlineVariant,
+                ),
+                modifier = Modifier.testTag("tag_filter_custom_${tag.id}"),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        imageVector = tag.resolvedIcon(),
+                        contentDescription = null,
+                        tint = if (isSelected) tagColor else tagColor.copy(alpha = 0.85f),
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        text = tag.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (isSelected) tagColor else colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            }
+        }
+
+        ScheduleCategory.entries
+            .filter { it != ScheduleCategory.TEST }
+            .forEach { category ->
+                val targetFilter = ScheduleTagFilter.BuiltIn(category)
+                val isSelected = selectedTagFilter == targetFilter
+                val accent = category.accentColor
+                Surface(
+                    onClick = {
+                        haptics.tick()
+                        onSelectTagFilter(targetFilter)
+                    },
+                    shape = CircleShape,
+                    color = if (isSelected) {
+                        accent.copy(alpha = if (flowColors.isDark) 0.18f else 0.12f)
+                    } else {
+                        flowColors.cardElevated
+                    },
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (isSelected) accent.copy(alpha = 0.55f) else colorScheme.outlineVariant,
+                    ),
+                    modifier = Modifier.testTag("tag_filter_category_${category.name.lowercase()}"),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = TagIconCatalog.iconForCategory(category),
+                            contentDescription = null,
+                            tint = if (isSelected) accent else accent.copy(alpha = 0.82f),
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Text(
+                            text = category.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (isSelected) accent else colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                }
+            }
+
+        Surface(
             onClick = {
                 haptics.tick()
                 onManageTags()
             },
-            leadingIcon = {
+            shape = CircleShape,
+            color = colorScheme.surfaceContainerHigh,
+            border = BorderStroke(1.dp, colorScheme.outlineVariant),
+            modifier = Modifier.testTag("schedule_manage_tags_chip"),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
                 Icon(
                     imageVector = Icons.Rounded.Label,
                     contentDescription = null,
-                    modifier = Modifier.size(15.dp),
+                    tint = colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(13.dp),
                 )
-            },
-            label = {
                 Text(
-                    text = if (customTagCount > 0) "标签($customTagCount)" else "+ 自定义标签",
+                    text = if (customTags.isEmpty()) "+ 标签" else "管理",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     softWrap = false,
                 )
-            },
-            modifier = Modifier.testTag("schedule_manage_tags_chip"),
-            shape = CircleShape,
-            colors = FilterChipDefaults.filterChipColors(
-                containerColor = colorScheme.secondaryContainer.copy(alpha = 0.6f),
-                labelColor = colorScheme.onSecondaryContainer,
-                iconColor = colorScheme.onSecondaryContainer,
-            ),
-            border = FilterChipDefaults.filterChipBorder(
-                enabled = true,
-                selected = false,
-                borderColor = colorScheme.outlineVariant,
-            ),
-        )
+            }
+        }
     }
 }
 
@@ -1066,10 +1201,13 @@ private fun FilterChipsRow(
 private fun ScheduleTimelinePane(
     state: ScheduleUiState,
     onSelectFilter: (ScheduleFilter) -> Unit,
+    onSelectTagFilter: (ScheduleTagFilter) -> Unit,
+    onResetTagFilter: () -> Unit,
     onManageTags: () -> Unit,
     onToggleComplete: (ScheduleEntity) -> Unit,
     onDelete: (ScheduleEntity) -> Unit,
     onEdit: (ScheduleEntity) -> Unit,
+    onLongClick: (ScheduleEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -1078,13 +1216,19 @@ private fun ScheduleTimelinePane(
         contentPadding = PaddingValues(bottom = 84.dp),
     ) {
         item(key = "filter_row") {
-            FilterChipsRow(
-                selected = state.selectedFilter,
-                selectedDateMillis = state.selectedDateMillis,
-                customTagCount = state.customTags.size,
-                onSelect = onSelectFilter,
-                onManageTags = onManageTags,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                FilterChipsRow(
+                    selected = state.selectedFilter,
+                    selectedDateMillis = state.selectedDateMillis,
+                    onSelect = onSelectFilter,
+                )
+                TagQuickFilterStrip(
+                    selectedTagFilter = state.selectedTagFilter,
+                    customTags = state.customTags,
+                    onSelectTagFilter = onSelectTagFilter,
+                    onManageTags = onManageTags,
+                )
+            }
         }
         scheduleTimelineItems(
             groups = state.groupedSchedules,
@@ -1093,9 +1237,12 @@ private fun ScheduleTimelinePane(
             isDayScopedFilter = state.isDayScopedFilter,
             showDateBadge = !state.isDayScopedFilter,
             customTags = state.customTags,
+            selectedTagFilter = state.selectedTagFilter,
+            onResetTagFilter = onResetTagFilter,
             onToggleComplete = onToggleComplete,
             onDelete = onDelete,
             onEdit = onEdit,
+            onLongClick = onLongClick,
         )
     }
 }
@@ -1105,14 +1252,24 @@ private fun EmptyScheduleCard(
     selectedDateMillis: Long,
     nowMillis: Long,
     isDayScopedFilter: Boolean,
+    selectedTagFilter: ScheduleTagFilter = ScheduleTagFilter.All,
+    customTags: List<CustomScheduleTag> = emptyList(),
+    onResetTagFilter: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val cardShape = MaterialTheme.shapes.large
     val isCustomNonToday = isDayScopedFilter && !DateTimeUtils.isSameDay(selectedDateMillis, nowMillis)
+    val activeTagLabel = when (selectedTagFilter) {
+        ScheduleTagFilter.All -> null
+        is ScheduleTagFilter.BuiltIn -> selectedTagFilter.category.label
+        is ScheduleTagFilter.Custom -> customTags.firstOrNull { it.id == selectedTagFilter.tagId }?.name ?: "所选标签"
+    }
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .testTag("empty_schedule_card"),
         shape = cardShape,
@@ -1170,10 +1327,10 @@ private fun EmptyScheduleCard(
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = if (isCustomNonToday) {
-                    "${DateTimeUtils.formatDateShort(selectedDateMillis)} 暂无安排日程"
-                } else {
-                    stringResource(R.string.empty_schedule_title)
+                text = when {
+                    activeTagLabel != null -> "「$activeTagLabel」标签下暂无日程"
+                    isCustomNonToday -> "${DateTimeUtils.formatDateShort(selectedDateMillis)} 暂无安排日程"
+                    else -> stringResource(R.string.empty_schedule_title)
                 },
                 style = MaterialTheme.typography.titleMedium,
                 color = colorScheme.onSurface,
@@ -1181,15 +1338,27 @@ private fun EmptyScheduleCard(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = if (isCustomNonToday) {
-                    "左右滑动可切换前一天 / 后一天，或点击右上角「+ 新建」/ 右下角 ✨ 添加日程"
-                } else {
-                    "点击右上角「+ 新建」或右下角 ✨ 一句话快速创建你的下一条日程"
+                text = when {
+                    activeTagLabel != null -> "可点击下方按钮切回全部标签，或为该分类新建日程"
+                    isCustomNonToday -> "左右滑动可切换前一天 / 后一天，或点击右上角「+ 新建」/ 右下角 ✨ 添加日程"
+                    else -> "点击右上角「+ 新建」或右下角 ✨ 一句话快速创建你的下一条日程"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+            if (activeTagLabel != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                TextButton(
+                    onClick = {
+                        haptics.tick()
+                        onResetTagFilter()
+                    },
+                    modifier = Modifier.testTag("reset_tag_filter_button"),
+                ) {
+                    Text("查看全部标签")
+                }
+            }
         }
     }
 }

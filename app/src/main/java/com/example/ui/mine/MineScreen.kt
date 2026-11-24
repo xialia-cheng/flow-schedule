@@ -19,6 +19,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +33,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -40,11 +43,13 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DoNotDisturbOn
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Label
 import androidx.compose.material.icons.rounded.NetworkCheck
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
@@ -56,6 +61,7 @@ import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.SettingsApplications
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.SystemUpdateAlt
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Update
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -109,8 +115,11 @@ import com.example.R
 import com.example.data.AppThemeMode
 import com.example.data.BackupRestoreMode
 import com.example.data.CustomAiConfig
+import com.example.data.CustomScheduleTag
 import com.example.data.DndLevel
 import com.example.data.FullBackupPayload
+import com.example.data.ScheduleCategory
+import com.example.data.TagIconCatalog
 import com.example.data.TimetableImportExport
 import com.example.data.WeekStartDay
 import com.example.notification.LiveUpdatePermissionStatus
@@ -118,6 +127,7 @@ import com.example.notification.ScheduleGuardService
 import com.example.smart.OpenAiCompatibleClient
 import com.example.ui.ScheduleViewModel
 import com.example.ui.components.AppHaptics
+import com.example.ui.components.CustomTagManagerDialog
 import com.example.ui.components.rememberAppHaptics
 import com.example.ui.smart.SmartCaptureViewModel
 import com.example.ui.theme.FlowTheme
@@ -196,6 +206,8 @@ fun MineScreen(
 
     var pendingBackupPreview by remember { mutableStateOf<Pair<String, FullBackupPayload>?>(null) }
     var showAboutSheet by rememberSaveable { mutableStateOf(false) }
+    var showTagManagerDialog by remember { mutableStateOf(false) }
+    var editingTagId by remember { mutableStateOf<String?>(null) }
 
     val importBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -455,31 +467,29 @@ fun MineScreen(
 
                             BackgroundGuardSettingsBlock(
                                 enabled = settings.backgroundGuardEnabled,
+                                excludeFromRecents = settings.excludeFromRecents,
                                 isServiceRunning = isGuardServiceActive,
                                 isIgnoringBatteryOptimizations = isIgnoringBatteryOpt,
                                 onToggle = { checked ->
                                     timetableViewModel.setBackgroundGuardEnabled(checked, context)
                                     isGuardServiceActive = checked
                                 },
-                                onOpenAppDetails = {
-                                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
+                                onToggleExcludeFromRecents = { checked ->
+                                    timetableViewModel.setExcludeFromRecents(checked, context)
+                                },
+                                onOpenAutoStartSettings = {
+                                    if (!com.example.notification.BackgroundKeepAliveHelper.openAutoStartOrBackgroundSettings(context)) {
+                                        onShowMessage("无法打开系统自启动或应用详情页")
                                     }
+                                },
+                                onOpenAppDetails = {
+                                    val intent = com.example.notification.BackgroundKeepAliveHelper.buildAppDetailsIntent(context)
                                     runCatching { context.startActivity(intent) }.onFailure {
                                         onShowMessage("无法打开系统应用详情页")
                                     }
                                 },
                                 onOpenBatterySettings = {
-                                    val batteryIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                                    val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
-                                    }
-                                    val target = if (batteryIntent.resolveActivity(context.packageManager) != null) {
-                                        batteryIntent
-                                    } else {
-                                        fallbackIntent
-                                    }
-                                    runCatching { context.startActivity(target) }.onFailure {
+                                    if (!com.example.notification.BackgroundKeepAliveHelper.openBatteryOptimizationSettings(context)) {
                                         onShowMessage("无法打开系统电池优化设置")
                                     }
                                 },
@@ -767,6 +777,32 @@ fun MineScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // 3.2 Schedule Tag Management Panel
+            item(key = "schedule_tags_section") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "日程分类与标签",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+
+                    ScheduleTagManagementCard(
+                        customTags = settings.customScheduleTags,
+                        onAddTagClick = {
+                            editingTagId = null
+                            showTagManagerDialog = true
+                        },
+                        onEditTagClick = { tagId ->
+                            editingTagId = tagId
+                            showTagManagerDialog = true
+                        },
+                        onDeleteTagClick = { tagId ->
+                            scheduleViewModel.deleteCustomTag(tagId)
+                        },
+                    )
                 }
             }
 
@@ -1153,6 +1189,26 @@ fun MineScreen(
             },
             onDismiss = { showAboutSheet = false },
             onShowMessage = onShowMessage,
+        )
+    }
+
+    if (showTagManagerDialog) {
+        CustomTagManagerDialog(
+            customTags = settings.customScheduleTags,
+            initialEditingTagId = editingTagId,
+            onAddTag = { name, colorHex, iconKey ->
+                scheduleViewModel.addCustomTag(name, colorHex, iconKey)
+            },
+            onUpdateTag = { id, name, colorHex, iconKey ->
+                scheduleViewModel.updateCustomTag(id, name, colorHex, iconKey)
+            },
+            onDeleteTag = { id ->
+                scheduleViewModel.deleteCustomTag(id)
+            },
+            onDismiss = {
+                showTagManagerDialog = false
+                editingTagId = null
+            },
         )
     }
 
@@ -2009,17 +2065,21 @@ private fun SelectablePillOption(
 @Composable
 private fun BackgroundGuardSettingsBlock(
     enabled: Boolean,
+    excludeFromRecents: Boolean,
     isServiceRunning: Boolean,
     isIgnoringBatteryOptimizations: Boolean,
     onToggle: (Boolean) -> Unit,
+    onToggleExcludeFromRecents: (Boolean) -> Unit,
+    onOpenAutoStartSettings: () -> Unit,
     onOpenAppDetails: () -> Unit,
     onOpenBatterySettings: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
     val haptics = rememberAppHaptics()
+    val oemBrand = remember { com.example.notification.BackgroundKeepAliveHelper.detectOemBrand() }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -2094,6 +2154,47 @@ private fun BackgroundGuardSettingsBlock(
             )
         }
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.VisibilityOff,
+                    contentDescription = null,
+                    tint = colorScheme.secondary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Column {
+                    Text(
+                        text = "从最近任务隐藏（防误划清理）",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "开启后多任务卡片会自动隐藏本应用，避免一键清理误杀守护服务；开启后可通过桌面图标、快捷瓷贴或通知栏随时回到应用",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Switch(
+                checked = excludeFromRecents,
+                onCheckedChange = { checked ->
+                    haptics.tick()
+                    onToggleExcludeFromRecents(checked)
+                },
+                modifier = Modifier.testTag("mine_switch_exclude_from_recents"),
+            )
+        }
+
         Surface(
             shape = MaterialTheme.shapes.medium,
             color = colorScheme.surfaceContainerLow,
@@ -2111,12 +2212,19 @@ private fun BackgroundGuardSettingsBlock(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(
-                        text = "系统保活建议（防误杀）",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colorScheme.onSurface,
-                    )
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            text = "系统保活建议（防误杀）",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colorScheme.onSurface,
+                        )
+                        Text(
+                            text = oemBrand.displayName,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colorScheme.primary,
+                        )
+                    }
                     Surface(
                         shape = CircleShape,
                         color = if (isIgnoringBatteryOptimizations) {
@@ -2139,15 +2247,39 @@ private fun BackgroundGuardSettingsBlock(
                     }
                 }
                 Text(
-                    text = "请在系统「应用详情 / 耗电管理」中开启「允许自启动」「完全允许后台行为（关闭电池优化）」，并在最近任务界面下拉锁定微澜日程。",
+                    text = com.example.notification.BackgroundKeepAliveHelper.oemKeepAliveGuideText(oemBrand),
                     style = MaterialTheme.typography.bodySmall,
                     color = colorScheme.onSurfaceVariant,
                 )
+                FilledTonalButton(
+                    onClick = {
+                        haptics.tick()
+                        onOpenAutoStartSettings()
+                    },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("mine_guard_autostart_button"),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Tune,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "一键前往自启动 / 后台管理",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    FilledTonalButton(
+                    OutlinedButton(
                         onClick = {
                             haptics.tick()
                             onOpenAppDetails()
@@ -2164,7 +2296,7 @@ private fun BackgroundGuardSettingsBlock(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "应用详情/自启动",
+                            text = "应用详情页",
                             style = MaterialTheme.typography.labelMedium,
                             maxLines = 1,
                             softWrap = false,
@@ -2192,6 +2324,222 @@ private fun BackgroundGuardSettingsBlock(
                             maxLines = 1,
                             softWrap = false,
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ScheduleTagManagementCard(
+    customTags: List<CustomScheduleTag>,
+    onAddTagClick: () -> Unit,
+    onEditTagClick: (String) -> Unit,
+    onDeleteTagClick: (String) -> Unit,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("mine_tag_management_card"),
+        shape = MaterialTheme.shapes.large,
+        color = flowColors.cardElevated,
+        border = BorderStroke(1.dp, colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Label,
+                        contentDescription = null,
+                        tint = colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Column {
+                        Text(
+                            text = "标签管理",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "5 个默认分类 · ${customTags.size} 个自定义标签",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                FilledTonalButton(
+                    onClick = {
+                        haptics.tick()
+                        onAddTagClick()
+                    },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.testTag("mine_add_tag_button"),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "新建标签",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            }
+
+            // Quiet reference strip for built-in categories
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ScheduleCategory.entries
+                    .filter { it != ScheduleCategory.TEST }
+                    .forEach { cat ->
+                        Surface(
+                            shape = CircleShape,
+                            color = colorScheme.surfaceContainerLow,
+                            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f)),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(
+                                    imageVector = TagIconCatalog.iconForCategory(cat),
+                                    contentDescription = null,
+                                    tint = cat.accentColor.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(12.dp),
+                                )
+                                Text(
+                                    text = cat.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
+                        }
+                    }
+            }
+
+            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.7f))
+
+            if (customTags.isEmpty()) {
+                Text(
+                    text = "暂未添加自定义标签；可点击右上角「新建标签」自由定制名称、颜色与图标，并在日程页一键筛选。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    customTags.forEach { tag ->
+                        val tagColor = tag.resolvedColor()
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = colorScheme.surfaceContainerLow,
+                            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.75f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("mine_tag_row_${tag.id}"),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(tagColor.copy(alpha = if (flowColors.isDark) 0.18f else 0.11f)),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            imageVector = tag.resolvedIcon(),
+                                            contentDescription = null,
+                                            tint = tagColor,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = tag.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = tag.colorHex,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = {
+                                            haptics.tick()
+                                            onEditTagClick(tag.id)
+                                        },
+                                        modifier = Modifier.testTag("mine_tag_edit_${tag.id}"),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Edit,
+                                            contentDescription = "编辑标签 ${tag.name}",
+                                            tint = colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            haptics.tick()
+                                            onDeleteTagClick(tag.id)
+                                        },
+                                        modifier = Modifier.testTag("mine_tag_delete_${tag.id}"),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.DeleteOutline,
+                                            contentDescription = "删除标签 ${tag.name}",
+                                            tint = colorScheme.error,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

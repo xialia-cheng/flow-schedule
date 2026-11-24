@@ -57,6 +57,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.ui.components.LocalAppHapticsEnabled
 import com.example.ui.components.PermissionOnboardingSheet
+import com.example.ui.components.ScheduleEditorSheet
+import com.example.ui.components.ScheduleLongPressSheet
 import com.example.ui.components.SmartDraftPreviewSheet
 import com.example.ui.components.SmartQuickCaptureSheet
 import com.example.ui.components.rememberAppHaptics
@@ -406,6 +408,75 @@ fun AppRootScreen(
             onShowMessage = showMessage,
         )
     }
+
+    if (scheduleState.showEditorSheet) {
+        ScheduleEditorSheet(
+            editingSchedule = scheduleState.editingSchedule,
+            customTags = scheduleState.customTags,
+            onAddCustomTag = { name, hex, iconKey -> scheduleViewModel.addCustomTag(name, hex, iconKey) },
+            onUpdateCustomTag = { id, name, hex, iconKey -> scheduleViewModel.updateCustomTag(id, name, hex, iconKey) },
+            onDeleteCustomTag = { id -> scheduleViewModel.deleteCustomTag(id) },
+            onDismiss = { scheduleViewModel.dismissEditorSheet() },
+            onSave = { id, title, notes, start, end, repeat, lead, cat, customTagId, customTagName, customTagColorHex ->
+                scheduleViewModel.saveSchedule(
+                    existingId = id,
+                    title = title,
+                    notes = notes,
+                    startTimeMillis = start,
+                    endTimeMillis = end,
+                    repeatRule = repeat,
+                    reminderMinutesBefore = lead,
+                    category = cat,
+                    customTagId = customTagId,
+                    customTagName = customTagName,
+                    customTagColorHex = customTagColorHex,
+                )
+            },
+            onDelete = if (scheduleState.editingSchedule != null) {
+                { scheduleViewModel.deleteSchedule(it) }
+            } else {
+                null
+            },
+            onOpenSmartCapture = { smartCaptureViewModel.openInputSheet() },
+        )
+    }
+
+    scheduleState.quickActionSchedule?.let { targetSchedule ->
+        val activeReReminder = remember(targetSchedule.id, scheduleState.reReminderVersion) {
+            scheduleViewModel.getScheduleReReminderMillis(targetSchedule.id)
+        }
+        ScheduleLongPressSheet(
+            schedule = targetSchedule,
+            nowMillis = scheduleState.nowMillis,
+            customTags = scheduleState.customTags,
+            activeReReminderMillis = activeReReminder,
+            onDismiss = { scheduleViewModel.dismissQuickActionMenu() },
+            onMoveToDate = { targetDateMillis ->
+                scheduleViewModel.moveScheduleToDate(targetSchedule, targetDateMillis)
+            },
+            onSelectTag = { category, customTag ->
+                scheduleViewModel.updateScheduleTag(targetSchedule, category, customTag)
+            },
+            onSetReminderLead = { minutes ->
+                scheduleViewModel.updateScheduleReminderLead(targetSchedule, minutes)
+            },
+            onScheduleReReminder = { minutes ->
+                scheduleViewModel.scheduleItemReReminder(targetSchedule, minutes)
+            },
+            onCancelReReminder = {
+                scheduleViewModel.cancelItemReReminder(targetSchedule)
+            },
+            onToggleComplete = {
+                scheduleViewModel.toggleComplete(targetSchedule)
+            },
+            onEdit = {
+                scheduleViewModel.openEditScheduleEditor(targetSchedule)
+            },
+            onDelete = {
+                scheduleViewModel.deleteSchedule(targetSchedule)
+            },
+        )
+    }
     }
 }
 
@@ -449,6 +520,7 @@ private fun TabContentHost(
                     permissionStatus = scheduleUiState.permissionStatus,
                     onToggleScheduleComplete = { scheduleViewModel.toggleComplete(it) },
                     onEditSchedule = { scheduleViewModel.openEditScheduleEditor(it) },
+                    onLongClickSchedule = { scheduleViewModel.openQuickActionMenu(it) },
                     onOpenSmartCapture = { smartCaptureViewModel.openInputSheet() },
                     onShowMessage = onShowMessage,
                     onOpenPermissions = onOpenPermissions,

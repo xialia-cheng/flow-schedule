@@ -63,7 +63,8 @@ class ScheduleGuardService : Service() {
             val action = intent.action ?: return
             val forceReschedule = action == Intent.ACTION_DATE_CHANGED ||
                 action == Intent.ACTION_TIME_CHANGED ||
-                action == Intent.ACTION_TIMEZONE_CHANGED
+                action == Intent.ACTION_TIMEZONE_CHANGED ||
+                action == Intent.ACTION_USER_PRESENT
             triggerSync(rescheduleAlarms = forceReschedule)
         }
     }
@@ -118,6 +119,8 @@ class ScheduleGuardService : Service() {
             addAction(Intent.ACTION_DATE_CHANGED)
             addAction(Intent.ACTION_TIME_CHANGED)
             addAction(Intent.ACTION_TIMEZONE_CHANGED)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
         }
         runCatching {
             ContextCompat.registerReceiver(

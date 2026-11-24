@@ -1,6 +1,7 @@
 package com.example.data
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -46,6 +47,14 @@ data class ScheduleEntity(
             CourseColorPalette.parseHexColorOrNull(customTagColorHex)?.let { return it }
         }
         return category.accentColor
+    }
+
+    fun resolvedTagIcon(customTags: List<CustomScheduleTag> = emptyList()): ImageVector {
+        if (customTagId.isNotBlank()) {
+            val matched = customTags.firstOrNull { it.id == customTagId }
+            if (matched != null) return matched.resolvedIcon()
+        }
+        return TagIconCatalog.iconForCategory(category)
     }
 
     val reminderTriggerMillis: Long

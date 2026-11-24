@@ -38,6 +38,35 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
             return
         }
 
+        if (action == ACTION_CUSTOM_RE_REMINDER) {
+            val key = intent.getStringExtra(ScheduleAlarmScheduler.EXTRA_RE_REMINDER_KEY).orEmpty()
+            val isCourse = intent.getBooleanExtra(ScheduleAlarmScheduler.EXTRA_RE_REMINDER_IS_COURSE, false)
+            val itemId = intent.getLongExtra(ScheduleAlarmScheduler.EXTRA_RE_REMINDER_ITEM_ID, 0L)
+            val title = intent.getStringExtra(ScheduleAlarmScheduler.EXTRA_RE_REMINDER_TITLE).orEmpty()
+            val subtitle = intent.getStringExtra(ScheduleAlarmScheduler.EXTRA_RE_REMINDER_SUBTITLE).orEmpty()
+            val pendingResult = goAsync()
+            val app = context.applicationContext as ScheduleApp
+            app.container.alarmScheduler.clearReReminderEntry(key)
+            app.container.liveUpdateManager.postCustomReReminderNotification(
+                itemId = itemId,
+                isCourse = isCourse,
+                title = title,
+                subtitle = subtitle,
+            )
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    app.container.liveUpdateCoordinator.syncAll(
+                        nowMillis = System.currentTimeMillis(),
+                        forceAlert = false,
+                        rescheduleAlarms = false,
+                    )
+                } finally {
+                    pendingResult.finish()
+                }
+            }
+            return
+        }
+
         if (action != ACTION_SCHEDULE_TRIGGER) return
 
         val phase = intent.getIntExtra(
@@ -81,6 +110,12 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val guardEnabled = runCatching {
+                    app.container.preferencesRepository.settings.first().backgroundGuardEnabled
+                }.getOrDefault(false)
+                if (guardEnabled && !ScheduleGuardService.isRunning) {
+                    ScheduleGuardService.tryStart(context)
+                }
                 app.container.liveUpdateCoordinator.syncAll(
                     nowMillis = effectiveNow,
                     forceAlert = shouldAlert,
@@ -95,5 +130,6 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_SCHEDULE_TRIGGER = "com.example.action.SCHEDULE_ALARM_TRIGGER"
         const val ACTION_GUARD_RESTART = "com.example.action.GUARD_RESTART"
+        const val ACTION_CUSTOM_RE_REMINDER = "com.example.action.CUSTOM_RE_REMINDER"
     }
 }
