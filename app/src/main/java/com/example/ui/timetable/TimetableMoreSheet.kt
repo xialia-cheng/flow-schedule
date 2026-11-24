@@ -1,5 +1,10 @@
 package com.example.ui.timetable
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -7,6 +12,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +25,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -30,10 +37,14 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.ImportExport
 import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
@@ -42,6 +53,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +81,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.AppThemeMode
 import com.example.data.CourseColorPalette
 import com.example.data.CourseEntity
@@ -96,6 +110,8 @@ fun TimetableMoreSheet(
     onDeleteCourse: (CourseEntity) -> Unit,
     onSetShowMorningExercise: (Boolean) -> Unit,
     onSetExtraBannerConfig: (title: String, startTime: String, endTime: String) -> Unit,
+    onSetShowLunchBreak: (Boolean) -> Unit,
+    onSetLunchBreakConfig: (title: String, afterSection: Int, startTime: String, endTime: String) -> Unit,
     onSetShowNonCurrentWeek: (Boolean) -> Unit,
     onSetShowWeekend: (Boolean) -> Unit,
     onSetWeekStartDay: (WeekStartDay) -> Unit,
@@ -109,6 +125,7 @@ fun TimetableMoreSheet(
     onSetThemeMode: (AppThemeMode) -> Unit,
     onSetCompactMode: (Boolean) -> Unit,
     onOpenPermissions: () -> Unit,
+    onOpenImportExport: () -> Unit,
     onTriggerFluidCloudTest: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -360,7 +377,7 @@ fun TimetableMoreSheet(
                                 color = colorScheme.onSurface,
                             )
                             Text(
-                                text = "隐藏早锻炼栏、非本周灰显与冗余信息，专注本周课程",
+                                text = "隐藏附加时段条、非本周灰显与冗余信息，专注本周课程",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colorScheme.onSurfaceVariant,
                             )
@@ -404,25 +421,42 @@ fun TimetableMoreSheet(
     if (showTimetableSettingsDialog && state.activeTimetable != null) {
         TimetableSettingsDialog(
             timetable = state.activeTimetable,
+            sectionTimes = state.sectionTimes,
             canDelete = state.allTimetables.size > 1,
             showMorningExercise = state.settings.showMorningExercise,
             extraBannerTitle = state.settings.extraBannerTitle,
             extraBannerStartTime = state.settings.extraBannerStartTime,
             extraBannerEndTime = state.settings.extraBannerEndTime,
+            showLunchBreak = state.settings.showLunchBreak,
+            lunchBreakTitle = state.settings.lunchBreakTitle,
+            lunchAfterSection = state.settings.lunchAfterSection,
+            lunchBreakStartTime = state.settings.lunchBreakStartTime,
+            lunchBreakEndTime = state.settings.lunchBreakEndTime,
             showNonCurrentWeek = state.settings.showNonCurrentWeekCourses,
             showWeekend = state.settings.showWeekend,
             weekStartDay = state.settings.weekStartDay,
             rowHeightDp = state.settings.timetableRowHeightDp,
             fontScale = state.settings.timetableFontScale,
+            courseReminderEnabled = state.settings.courseReminderEnabled,
+            courseReminderLeadMinutes = state.settings.courseReminderLeadMinutes,
             onSetShowMorningExercise = onSetShowMorningExercise,
             onSetExtraBannerConfig = onSetExtraBannerConfig,
+            onSetShowLunchBreak = onSetShowLunchBreak,
+            onSetLunchBreakConfig = onSetLunchBreakConfig,
             onSetShowNonCurrentWeek = onSetShowNonCurrentWeek,
             onSetShowWeekend = onSetShowWeekend,
             onSetWeekStartDay = onSetWeekStartDay,
             onSetRowHeightDp = onSetTimetableRowHeightDp,
             onSetFontScale = onSetTimetableFontScale,
-            onSave = { name, startMonday, weeks ->
-                onUpdateTimetableSettings(name, startMonday, weeks)
+            onOpenSectionTimes = { showSectionTimesDialog = true },
+            onOpenReminder = { showReminderDialog = true },
+            onOpenImportExport = {
+                showTimetableSettingsDialog = false
+                onDismiss()
+                onOpenImportExport()
+            },
+            onSave = { name, startMonday, totalWeeks ->
+                onUpdateTimetableSettings(name, startMonday, totalWeeks)
                 showTimetableSettingsDialog = false
             },
             onDelete = {
@@ -608,295 +642,562 @@ private fun CreateTimetableDialog(
 @Composable
 private fun TimetableSettingsDialog(
     timetable: TimetableEntity,
+    sectionTimes: List<SectionTimeEntity>,
     canDelete: Boolean,
     showMorningExercise: Boolean,
     extraBannerTitle: String,
     extraBannerStartTime: String,
     extraBannerEndTime: String,
+    showLunchBreak: Boolean,
+    lunchBreakTitle: String,
+    lunchAfterSection: Int,
+    lunchBreakStartTime: String,
+    lunchBreakEndTime: String,
     showNonCurrentWeek: Boolean,
     showWeekend: Boolean,
     weekStartDay: WeekStartDay,
     rowHeightDp: Int,
     fontScale: Float,
+    courseReminderEnabled: Boolean,
+    courseReminderLeadMinutes: Int,
     onSetShowMorningExercise: (Boolean) -> Unit,
     onSetExtraBannerConfig: (title: String, startTime: String, endTime: String) -> Unit,
+    onSetShowLunchBreak: (Boolean) -> Unit,
+    onSetLunchBreakConfig: (title: String, afterSection: Int, startTime: String, endTime: String) -> Unit,
     onSetShowNonCurrentWeek: (Boolean) -> Unit,
     onSetShowWeekend: (Boolean) -> Unit,
     onSetWeekStartDay: (WeekStartDay) -> Unit,
     onSetRowHeightDp: (Int) -> Unit,
     onSetFontScale: (Float) -> Unit,
+    onOpenSectionTimes: () -> Unit,
+    onOpenReminder: () -> Unit,
+    onOpenImportExport: () -> Unit,
     onSave: (name: String, semesterStartMondayMillis: Long, totalWeeks: Int) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val maxAfterSection = (sectionTimes.size - 1).coerceAtLeast(1)
+
     var name by remember(timetable) { mutableStateOf(timetable.name) }
     var startMonday by remember(timetable) { mutableLongStateOf(timetable.semesterStartMondayMillis) }
     var totalWeeks by remember(timetable) { mutableIntStateOf(timetable.totalWeeks) }
+
     var bannerTitle by remember(extraBannerTitle) { mutableStateOf(extraBannerTitle) }
     var bannerStart by remember(extraBannerStartTime) { mutableStateOf(extraBannerStartTime) }
     var bannerEnd by remember(extraBannerEndTime) { mutableStateOf(extraBannerEndTime) }
+
+    var lunchTitle by remember(lunchBreakTitle) { mutableStateOf(lunchBreakTitle) }
+    var lunchAfter by remember(lunchAfterSection, maxAfterSection) {
+        mutableIntStateOf(lunchAfterSection.coerceIn(1, maxAfterSection))
+    }
+    var lunchStart by remember(lunchBreakStartTime) { mutableStateOf(lunchBreakStartTime) }
+    var lunchEnd by remember(lunchBreakEndTime) { mutableStateOf(lunchBreakEndTime) }
+
     var showDatePicker by remember { mutableStateOf(false) }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("课表自由设置") },
-        text = {
-            Column(
-                modifier = Modifier
-                    .heightIn(max = 460.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("课表名称") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                // Week 1 start date
-                Surface(
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 24.dp)
+                .widthIn(max = 560.dp)
+                .heightIn(max = 680.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = colorScheme.surface,
+            tonalElevation = 4.dp,
+            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Header
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.small)
-                        .clickable { showDatePicker = true }
-                        .testTag("settings_semester_start_picker"),
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Icon(Icons.Rounded.CalendarMonth, null, Modifier.size(18.dp))
-                            Column {
-                                Text("开学第一周日期", style = MaterialTheme.typography.labelMedium)
-                                Text(
-                                    text = DateTimeUtils.formatFullDate(startMonday),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                        Icon(Icons.Rounded.ChevronRight, null)
-                    }
-                }
-
-                // Total weeks (1..52, no longer fixed at 20)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("学期总周数", style = MaterialTheme.typography.labelMedium)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            FilledTonalButton(
-                                onClick = { if (totalWeeks > 1) totalWeeks-- },
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                modifier = Modifier
-                                    .height(30.dp)
-                                    .testTag("settings_total_weeks_minus"),
-                            ) { Text("-") }
-                            Text(
-                                text = "$totalWeeks 周",
-                                fontFamily = MonoFontFamily,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            FilledTonalButton(
-                                onClick = { if (totalWeeks < CourseEntity.MAX_TOTAL_WEEKS) totalWeeks++ },
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                modifier = Modifier
-                                    .height(30.dp)
-                                    .testTag("settings_total_weeks_plus"),
-                            ) { Text("+") }
-                        }
-                    }
-                    Slider(
-                        value = totalWeeks.toFloat(),
-                        onValueChange = { totalWeeks = it.roundToInt().coerceIn(1, CourseEntity.MAX_TOTAL_WEEKS) },
-                        valueRange = 1f..CourseEntity.MAX_TOTAL_WEEKS.toFloat(),
-                        modifier = Modifier.testTag("settings_total_weeks_slider"),
-                    )
-                }
-
-                // Week start day (周一 / 周日)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("每周起始日", style = MaterialTheme.typography.bodyMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        WeekStartDay.entries.forEach { dayOpt ->
-                            FilterChip(
-                                selected = weekStartDay == dayOpt,
-                                onClick = {
-                                    onSetWeekStartDay(dayOpt)
-                                    startMonday = DateTimeUtils.weekStartOfWeekMillis(startMonday, dayOpt)
-                                },
-                                label = { Text(dayOpt.label) },
-                                shape = CircleShape,
-                                modifier = Modifier.testTag("settings_week_start_${dayOpt.name.lowercase()}"),
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Tune,
+                                contentDescription = null,
+                                tint = colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "课表设置",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = colorScheme.onSurface,
+                            )
+                            Text(
+                                text = "学期、网格样式、可选时段与提醒数据",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colorScheme.onSurfaceVariant,
                             )
                         }
                     }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "关闭",
+                            tint = colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
-                SwitchSettingRow("显示周六、周日", showWeekend, onSetShowWeekend)
-                SwitchSettingRow("显示非本周课程（灰显角标）", showNonCurrentWeek, onSetShowNonCurrentWeek)
+                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.7f))
 
-                // Custom extra top time-slot banner (e.g. Morning Exercise)
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                // 4 Grouped Settings Cards
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    // 1. 基础与学期
+                    SettingsGroupCard(
+                        icon = Icons.Rounded.CalendarMonth,
+                        title = "基础与学期",
                     ) {
-                        SwitchSettingRow("显示顶部附加时段条", showMorningExercise, onSetShowMorningExercise)
-                        if (showMorningExercise) {
-                            OutlinedTextField(
-                                value = bannerTitle,
-                                onValueChange = { bannerTitle = it },
-                                label = { Text("附加时段名称") },
-                                placeholder = { Text("例如：早锻炼 / 早自习") },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("settings_extra_banner_title"),
-                            )
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text("课表名称") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        SettingsNavigationRow(
+                            icon = Icons.Rounded.CalendarMonth,
+                            title = "开学第一周日期",
+                            subtitle = DateTimeUtils.formatFullDate(startMonday),
+                            onClick = { showDatePicker = true },
+                            modifier = Modifier.testTag("settings_semester_start_picker"),
+                        )
+
+                        HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                OutlinedTextField(
-                                    value = bannerStart,
-                                    onValueChange = { bannerStart = it },
-                                    label = { Text("开始时间") },
-                                    placeholder = { Text("06:40") },
-                                    singleLine = true,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("settings_extra_banner_start"),
+                                Text(
+                                    text = "学期总周数",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colorScheme.onSurface,
                                 )
-                                OutlinedTextField(
-                                    value = bannerEnd,
-                                    onValueChange = { bannerEnd = it },
-                                    label = { Text("结束时间") },
-                                    placeholder = { Text("07:30") },
-                                    singleLine = true,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("settings_extra_banner_end"),
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    FilledTonalButton(
+                                        onClick = { if (totalWeeks > 1) totalWeeks-- },
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                        modifier = Modifier
+                                            .height(30.dp)
+                                            .testTag("settings_total_weeks_minus"),
+                                    ) { Text("-") }
+                                    Text(
+                                        text = "$totalWeeks 周",
+                                        fontFamily = MonoFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colorScheme.primary,
+                                    )
+                                    FilledTonalButton(
+                                        onClick = { if (totalWeeks < CourseEntity.MAX_TOTAL_WEEKS) totalWeeks++ },
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                        modifier = Modifier
+                                            .height(30.dp)
+                                            .testTag("settings_total_weeks_plus"),
+                                    ) { Text("+") }
+                                }
                             }
+                            Slider(
+                                value = totalWeeks.toFloat(),
+                                onValueChange = { totalWeeks = it.roundToInt().coerceIn(1, CourseEntity.MAX_TOTAL_WEEKS) },
+                                valueRange = 1f..CourseEntity.MAX_TOTAL_WEEKS.toFloat(),
+                                modifier = Modifier.testTag("settings_total_weeks_slider"),
+                            )
                         }
-                    }
-                }
 
-                // Grid row height & card font size tuning
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                ) {
-                    Column(
-                        modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
+                        HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("网格行高与字体大小", style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                text = "每周起始日",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colorScheme.onSurface,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                WeekStartDay.entries.forEach { dayOpt ->
+                                    FilterChip(
+                                        selected = weekStartDay == dayOpt,
+                                        onClick = {
+                                            onSetWeekStartDay(dayOpt)
+                                            startMonday = DateTimeUtils.weekStartOfWeekMillis(startMonday, dayOpt)
+                                        },
+                                        label = { Text(dayOpt.label) },
+                                        shape = CircleShape,
+                                        modifier = Modifier.testTag("settings_week_start_${dayOpt.name.lowercase()}"),
+                                    )
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
+
+                        SettingsNavigationRow(
+                            icon = Icons.Rounded.AccessTime,
+                            title = "节次作息时间设置",
+                            subtitle = "当前共 ${sectionTimes.size.coerceIn(6, 16)} 节 · 自由配置每节上下课时间",
+                            onClick = onOpenSectionTimes,
+                            modifier = Modifier.testTag("settings_section_times_entry"),
+                        )
+
+                        if (canDelete) {
+                            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
+                            TextButton(
+                                onClick = onDelete,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(Icons.Rounded.DeleteOutline, null, tint = FlowTheme.colors.deleteAccent)
+                                Spacer(Modifier.width(6.dp))
+                                Text("删除当前课表", color = FlowTheme.colors.deleteAccent)
+                            }
+                        }
+                    }
+
+                    // 2. 课表显示
+                    SettingsGroupCard(
+                        icon = Icons.Rounded.Visibility,
+                        title = "课表显示",
+                        trailing = {
                             TextButton(
                                 onClick = {
                                     onSetRowHeightDp(72)
                                     onSetFontScale(1.0f)
                                 },
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier.height(30.dp),
                             ) {
-                                Text("恢复默认", style = MaterialTheme.typography.labelSmall)
+                                Text("恢复默认", style = MaterialTheme.typography.labelMedium)
+                            }
+                        },
+                    ) {
+                        SwitchSettingRow(
+                            title = "显示周末列（周六、周日）",
+                            subtitle = "关闭后仅展示周一至周五课程网格",
+                            checked = showWeekend,
+                            onCheckedChange = onSetShowWeekend,
+                        )
+
+                        HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
+
+                        SwitchSettingRow(
+                            title = "显示非本周课程",
+                            subtitle = "在网格中以半透明角标提示非本周排课",
+                            checked = showNonCurrentWeek,
+                            onCheckedChange = onSetShowNonCurrentWeek,
+                        )
+
+                        HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
+
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text("网格行高", style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    text = "${rowHeightDp} dp",
+                                    fontFamily = MonoFontFamily,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colorScheme.primary,
+                                )
+                            }
+                            Slider(
+                                value = rowHeightDp.toFloat().coerceIn(54f, 108f),
+                                onValueChange = { onSetRowHeightDp(it.roundToInt()) },
+                                valueRange = 54f..108f,
+                                modifier = Modifier.testTag("settings_row_height_slider"),
+                            )
+
+                            Spacer(Modifier.height(4.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text("卡片字号缩放", style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    text = "${(fontScale * 100).roundToInt()}%",
+                                    fontFamily = MonoFontFamily,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colorScheme.primary,
+                                )
+                            }
+                            Slider(
+                                value = fontScale,
+                                onValueChange = { onSetFontScale(it) },
+                                valueRange = 0.80f..1.35f,
+                                modifier = Modifier.testTag("settings_font_scale_slider"),
+                            )
+                        }
+                    }
+
+                    // 3. 可选附加时段 (渐进式展开)
+                    SettingsGroupCard(
+                        icon = Icons.Rounded.Schedule,
+                        title = "可选附加时段",
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SwitchSettingRow(
+                                title = "顶部打卡时段条",
+                                subtitle = "默认关闭 · 开启后在课表上方展示自定义打卡条",
+                                checked = showMorningExercise,
+                                onCheckedChange = onSetShowMorningExercise,
+                                modifier = Modifier.testTag("settings_show_extra_banner_switch"),
+                            )
+                            AnimatedVisibility(
+                                visible = showMorningExercise,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut(),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(top = 4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    OutlinedTextField(
+                                        value = bannerTitle,
+                                        onValueChange = { bannerTitle = it },
+                                        label = { Text("时段名称") },
+                                        placeholder = { Text("例如：早锻炼 / 早自习 / 晨读") },
+                                        singleLine = true,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("settings_extra_banner_title"),
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        OutlinedTextField(
+                                            value = bannerStart,
+                                            onValueChange = { bannerStart = it },
+                                            label = { Text("开始时间") },
+                                            placeholder = { Text("06:40") },
+                                            singleLine = true,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("settings_extra_banner_start"),
+                                        )
+                                        OutlinedTextField(
+                                            value = bannerEnd,
+                                            onValueChange = { bannerEnd = it },
+                                            label = { Text("结束时间") },
+                                            placeholder = { Text("07:30") },
+                                            singleLine = true,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("settings_extra_banner_end"),
+                                        )
+                                    }
+                                }
                             }
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text("单节行高", style = MaterialTheme.typography.bodySmall)
-                            Text(
-                                text = "${rowHeightDp} dp",
-                                fontFamily = MonoFontFamily,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
+
+                        HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.55f))
+
+                        val safeAfter = lunchAfter.coerceIn(1, maxAfterSection)
+                        val prevSlot = sectionTimes.find { it.sectionNumber == safeAfter }
+                        val nextSlot = sectionTimes.find { it.sectionNumber == safeAfter + 1 }
+                        val autoStartPlaceholder = prevSlot?.endLabel() ?: "11:40"
+                        val autoEndPlaceholder = nextSlot?.startLabel() ?: "14:00"
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SwitchSettingRow(
+                                title = "课间午休分隔带",
+                                subtitle = "默认关闭 · 开启后在指定节次之间插入分隔条",
+                                checked = showLunchBreak,
+                                onCheckedChange = onSetShowLunchBreak,
+                                modifier = Modifier.testTag("settings_show_lunch_break_switch"),
                             )
+                            AnimatedVisibility(
+                                visible = showLunchBreak,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut(),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(top = 4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    OutlinedTextField(
+                                        value = lunchTitle,
+                                        onValueChange = { lunchTitle = it },
+                                        label = { Text("分隔带名称") },
+                                        placeholder = { Text("午休") },
+                                        singleLine = true,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("settings_lunch_break_title"),
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = "显示位置",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = colorScheme.onSurface,
+                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            FilledTonalButton(
+                                                onClick = { if (lunchAfter > 1) lunchAfter-- },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                                modifier = Modifier
+                                                    .height(30.dp)
+                                                    .testTag("settings_lunch_after_minus"),
+                                            ) { Text("-") }
+                                            Text(
+                                                text = "第 $safeAfter 节后",
+                                                fontFamily = MonoFontFamily,
+                                                fontWeight = FontWeight.Bold,
+                                                color = colorScheme.primary,
+                                            )
+                                            FilledTonalButton(
+                                                onClick = { if (lunchAfter < maxAfterSection) lunchAfter++ },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                                modifier = Modifier
+                                                    .height(30.dp)
+                                                    .testTag("settings_lunch_after_plus"),
+                                            ) { Text("+") }
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        OutlinedTextField(
+                                            value = lunchStart,
+                                            onValueChange = { lunchStart = it },
+                                            label = { Text("开始时间（可选）") },
+                                            placeholder = { Text(autoStartPlaceholder) },
+                                            singleLine = true,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("settings_lunch_break_start"),
+                                        )
+                                        OutlinedTextField(
+                                            value = lunchEnd,
+                                            onValueChange = { lunchEnd = it },
+                                            label = { Text("结束时间（可选）") },
+                                            placeholder = { Text(autoEndPlaceholder) },
+                                            singleLine = true,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("settings_lunch_break_end"),
+                                        )
+                                    }
+
+                                    Text(
+                                        text = "留空则自动取第 $safeAfter 节下课至第 ${safeAfter + 1} 节上课的间隔时间（$autoStartPlaceholder - $autoEndPlaceholder）",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
                         }
-                        Slider(
-                            value = rowHeightDp.toFloat().coerceIn(54f, 108f),
-                            onValueChange = { onSetRowHeightDp(it.roundToInt()) },
-                            valueRange = 54f..108f,
-                            modifier = Modifier.testTag("settings_row_height_slider"),
+                    }
+
+                    // 4. 提醒与数据
+                    SettingsGroupCard(
+                        icon = Icons.Rounded.NotificationsActive,
+                        title = "提醒与数据",
+                    ) {
+                        SettingsNavigationRow(
+                            icon = Icons.Rounded.NotificationsActive,
+                            title = "课前提醒 / 实况通知快捷设置",
+                            subtitle = if (courseReminderEnabled) {
+                                "已开启 · 提前 ${courseReminderLeadMinutes} 分钟发送实况通知"
+                            } else {
+                                "已关闭 · 点击配置提醒、实况通知与免打扰"
+                            },
+                            onClick = onOpenReminder,
+                            modifier = Modifier.testTag("settings_reminder_entry"),
                         )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text("课程卡片字体", style = MaterialTheme.typography.bodySmall)
-                            Text(
-                                text = "${(fontScale * 100).roundToInt()}%",
-                                fontFamily = MonoFontFamily,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                        Slider(
-                            value = fontScale,
-                            onValueChange = { onSetFontScale(it) },
-                            valueRange = 0.80f..1.35f,
-                            modifier = Modifier.testTag("settings_font_scale_slider"),
+                        HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
+
+                        SettingsNavigationRow(
+                            icon = Icons.Rounded.ImportExport,
+                            title = "导入导出与备份",
+                            subtitle = "CSV / 教务网页导入、分享码与 JSON 全量备份恢复",
+                            onClick = onOpenImportExport,
+                            modifier = Modifier.testTag("settings_import_export_entry"),
                         )
                     }
                 }
 
-                if (canDelete) {
-                    TextButton(onClick = onDelete) {
-                        Icon(Icons.Rounded.DeleteOutline, null, tint = FlowTheme.colors.deleteAccent)
-                        Spacer(Modifier.width(4.dp))
-                        Text("删除当前课表", color = FlowTheme.colors.deleteAccent)
+                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.7f))
+
+                // Bottom actions
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("取消")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            onSetExtraBannerConfig(bannerTitle, bannerStart, bannerEnd)
+                            onSetLunchBreakConfig(lunchTitle, lunchAfter, lunchStart, lunchEnd)
+                            onSave(name, startMonday, totalWeeks)
+                        },
+                        modifier = Modifier.testTag("settings_save_button"),
+                    ) {
+                        Text("保存")
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSetExtraBannerConfig(bannerTitle, bannerStart, bannerEnd)
-                    onSave(name, startMonday, totalWeeks)
-                },
-                modifier = Modifier.testTag("settings_save_button"),
-            ) {
-                Text("保存")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        },
-    )
+        }
+    }
 
     if (showDatePicker) {
         val pickerState = rememberDatePickerState(initialSelectedDateMillis = startMonday)
@@ -922,21 +1223,150 @@ private fun TimetableSettingsDialog(
 }
 
 @Composable
+private fun SettingsGroupCard(
+    icon: ImageVector,
+    title: String,
+    trailing: @Composable (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val flowColors = FlowTheme.colors
+
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = flowColors.cardElevated,
+        border = BorderStroke(1.dp, colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.onSurface,
+                    )
+                }
+                trailing?.invoke()
+            }
+            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.65f))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SettingsNavigationRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = colorScheme.onSurface,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun SwitchSettingRow(
     title: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier,
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = colorScheme.onSurface,
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
@@ -1133,18 +1563,26 @@ private fun CourseReminderDialog(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                SwitchSettingRow("展示地点 / 教室", showLocation) {
-                    onSetFluidCloudDisplayOptions(it, showTeacher, showNotes)
-                }
-                SwitchSettingRow("展示授课教师", showTeacher) {
-                    onSetFluidCloudDisplayOptions(showLocation, it, showNotes)
-                }
-                SwitchSettingRow("展示备注信息", showNotes) {
-                    onSetFluidCloudDisplayOptions(showLocation, showTeacher, it)
-                }
-                SwitchSettingRow("锁屏展示课程与日程详情（默认关闭）", lockscreenDetails) {
-                    onSetLockscreenDetails(it)
-                }
+                SwitchSettingRow(
+                    title = "展示地点 / 教室",
+                    checked = showLocation,
+                    onCheckedChange = { onSetFluidCloudDisplayOptions(it, showTeacher, showNotes) },
+                )
+                SwitchSettingRow(
+                    title = "展示授课教师",
+                    checked = showTeacher,
+                    onCheckedChange = { onSetFluidCloudDisplayOptions(showLocation, it, showNotes) },
+                )
+                SwitchSettingRow(
+                    title = "展示备注信息",
+                    checked = showNotes,
+                    onCheckedChange = { onSetFluidCloudDisplayOptions(showLocation, showTeacher, it) },
+                )
+                SwitchSettingRow(
+                    title = "锁屏展示课程与日程详情（默认关闭）",
+                    checked = lockscreenDetails,
+                    onCheckedChange = onSetLockscreenDetails,
+                )
 
                 Button(
                     onClick = onTriggerFluidCloudTest,

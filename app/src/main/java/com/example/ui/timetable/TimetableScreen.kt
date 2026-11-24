@@ -100,10 +100,13 @@ import com.example.data.SectionTimeEntity
 import com.example.notification.LiveActivityItem
 import com.example.notification.LiveUpdatePermissionStatus
 import com.example.ui.components.FluidCloudCapsuleBanner
+import com.example.ui.components.SmartCaptureFab
+import com.example.ui.components.rememberScrollAwareFabState
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 import kotlinx.coroutines.delay
 import android.view.HapticFeedbackConstants
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalView
 import java.util.Calendar
 
@@ -332,28 +335,32 @@ fun TimetableScreen(
 
         // 4. Main Content Area: Week Grid View OR Swipeable Day Timeline View
         val scrollState = rememberScrollState()
+        val fabScrollState = rememberScrollAwareFabState()
+        LaunchedEffect(state.viewMode, state.displayedWeek, state.selectedDateMillis) {
+            fabScrollState.expand()
+        }
+        LaunchedEffect(scrollState.value, state.viewMode) {
+            if (state.viewMode == TimetableViewMode.WEEK && scrollState.value <= 12) {
+                fabScrollState.expand()
+            }
+        }
         val sectionCount = state.sectionTimes.size.coerceIn(
             BellScheduleGenerator.MIN_SECTION_COUNT,
             BellScheduleGenerator.MAX_SECTION_COUNT,
         )
-        val lunchAfterSection: Int? = remember(state.sectionTimes, sectionCount) {
-            val ordered = state.sectionTimes.filter { it.sectionNumber in 1..sectionCount }.sortedBy { it.sectionNumber }
-            var bestSec: Int? = null
-            var bestGap = 44 // >= 45 minutes midday gap qualifies as lunch break
-            for (i in 0 until ordered.lastIndex) {
-                val cur = ordered[i]
-                val nxt = ordered[i + 1]
-                val curEndMin = cur.endHour * 60 + cur.endMinute
-                val nxtStartMin = nxt.startHour * 60 + nxt.startMinute
-                val gap = nxtStartMin - curEndMin
-                if (curEndMin in (11 * 60)..(14 * 60) && gap > bestGap) {
-                    bestGap = gap
-                    bestSec = cur.sectionNumber
-                }
-            }
-            bestSec
+        val resolvedLunchBreak: ResolvedLunchBreak? = remember(
+            state.settings,
+            state.sectionTimes,
+            sectionCount,
+        ) {
+            resolveLunchBreak(
+                settings = state.settings,
+                sectionTimes = state.sectionTimes,
+                sectionCount = sectionCount,
+            )
         }
-        val lunchBreakHeight = if (lunchAfterSection != null) {
+        val lunchAfterSection = resolvedLunchBreak?.afterSection
+        val lunchBreakHeight = if (resolvedLunchBreak != null) {
             if (compactMode) 22.dp else 28.dp
         } else {
             0.dp
@@ -368,7 +375,8 @@ fun TimetableScreen(
         Box(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .nestedScroll(fabScrollState.nestedScrollConnection),
         ) {
             AnimatedContent(
                 targetState = state.viewMode,
@@ -416,7 +424,7 @@ fun TimetableScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .verticalScroll(scrollState)
-                                    .padding(bottom = 24.dp),
+                                    .padding(bottom = 84.dp),
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -428,7 +436,7 @@ fun TimetableScreen(
                                         sectionTimes = state.sectionTimes,
                                         sectionCount = sectionCount,
                                         sectionHeight = sectionHeight,
-                                        lunchAfterSection = lunchAfterSection,
+                                        resolvedLunchBreak = resolvedLunchBreak,
                                         lunchBreakHeight = lunchBreakHeight,
                                         compactMode = compactMode,
                                         nowMillis = liveNowMillis,
@@ -515,23 +523,16 @@ fun TimetableScreen(
                                         }
 
                                         // Empty slots are ONLY clickable in Edit Mode to prevent accidental popups while browsing/swiping
-                                        if (lunchAfterSection != null && lunchBreakHeight > 0.dp) {
-                                            val beforeSlot = state.sectionTimes.find { it.sectionNumber == lunchAfterSection }
-                                            val afterSlot = state.sectionTimes.find { it.sectionNumber == lunchAfterSection + 1 }
-                                            val lunchText = if (beforeSlot != null && afterSlot != null) {
-                                                "午休时间 · ${beforeSlot.endLabel()} - ${afterSlot.startLabel()}"
-                                            } else {
-                                                "午休时间"
-                                            }
+                                        if (resolvedLunchBreak != null && lunchBreakHeight > 0.dp) {
                                             Box(
                                                 modifier = Modifier
-                                                    .offset(y = sectionHeight * lunchAfterSection)
+                                                    .offset(y = sectionHeight * resolvedLunchBreak.afterSection)
                                                     .fillMaxWidth()
                                                     .height(lunchBreakHeight),
                                                 contentAlignment = Alignment.Center,
                                             ) {
                                                 Text(
-                                                    text = lunchText,
+                                                    text = resolvedLunchBreak.gridDisplayText,
                                                     style = MaterialTheme.typography.labelSmall,
                                                     fontSize = 10.sp,
                                                     color = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
@@ -620,12 +621,12 @@ fun TimetableScreen(
                                             )
                                         }
 
-                                        // Gentle empty-timetable hint overlay without blocking taps
+                                        // Gentle empty-timetable hint overlay positioned cleanly above the bottom-right FAB
                                         if (state.courses.isEmpty()) {
                                             Surface(
                                                 modifier = Modifier
-                                                    .align(Alignment.Center)
-                                                    .padding(horizontal = 24.dp),
+                                                    .align(Alignment.TopCenter)
+                                                    .padding(start = 20.dp, end = 24.dp, top = 84.dp, bottom = 88.dp),
                                                 shape = MaterialTheme.shapes.large,
                                                 color = flowColors.cardElevated.copy(alpha = 0.94f),
                                                 border = BorderStroke(1.dp, colorScheme.outlineVariant),
@@ -685,23 +686,14 @@ fun TimetableScreen(
                 }
             }
 
-            // Compact sparkle trigger button (bottom-right) — input sheet stays hidden until tapped
-            FloatingActionButton(
-                onClick = { tapHaptic(); onOpenSmartCapture() },
-                containerColor = colorScheme.primaryContainer,
-                contentColor = colorScheme.onPrimaryContainer,
-                shape = CircleShape,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 16.dp)
-                    .size(52.dp)
-                    .testTag("timetable_smart_capture_fab"),
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.AutoAwesome,
-                    contentDescription = "一句话智能创建日程与课程",
-                )
-            }
+            // Unified sparkle trigger button (bottom-right) with spring rebound & scroll collapse/expand
+            SmartCaptureFab(
+                visible = fabScrollState.isVisible,
+                contentDescription = "一句话智能创建日程与课程",
+                testTag = "timetable_smart_capture_fab",
+                onClick = onOpenSmartCapture,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
         }
     }
 
@@ -815,6 +807,10 @@ fun TimetableScreen(
             onSetExtraBannerConfig = { title, start, end ->
                 viewModel.setExtraBannerConfig(title, start, end)
             },
+            onSetShowLunchBreak = { viewModel.setShowLunchBreak(it) },
+            onSetLunchBreakConfig = { title, afterSec, start, end ->
+                viewModel.setLunchBreakConfig(title, afterSec, start, end)
+            },
             onSetShowNonCurrentWeek = { viewModel.setShowNonCurrentWeekCourses(it) },
             onSetShowWeekend = { viewModel.setShowWeekend(it) },
             onSetWeekStartDay = { viewModel.setWeekStartDay(it) },
@@ -830,6 +826,7 @@ fun TimetableScreen(
             onSetThemeMode = { viewModel.setThemeMode(it) },
             onSetCompactMode = { viewModel.setCompactMode(it) },
             onOpenPermissions = onOpenPermissions,
+            onOpenImportExport = { showImportSheet = true },
             onTriggerFluidCloudTest = onTriggerFluidCloudTest,
             onDismiss = { showMoreSheet = false },
         )
@@ -1339,7 +1336,7 @@ private fun MorningExerciseStrip(
                     modifier = Modifier.size(16.dp),
                 )
                 Text(
-                    text = title.ifBlank { "早锻炼附加时段" },
+                    text = title.ifBlank { "附加时段" },
                     style = MaterialTheme.typography.labelLarge,
                     color = colorScheme.onSurface,
                     maxLines = 1,
@@ -1372,7 +1369,7 @@ private fun SectionTimeAxisColumn(
     sectionTimes: List<SectionTimeEntity>,
     sectionCount: Int,
     sectionHeight: Dp,
-    lunchAfterSection: Int?,
+    resolvedLunchBreak: ResolvedLunchBreak?,
     lunchBreakHeight: Dp,
     compactMode: Boolean,
     nowMillis: Long,
@@ -1586,19 +1583,15 @@ private fun SectionTimeAxisColumn(
                         )
                     }
                 }
-                if (lunchAfterSection == section && lunchBreakHeight > 0.dp) {
-                    val beforeSlot = sectionTimes.find { it.sectionNumber == section }
-                    val afterSlot = sectionTimes.find { it.sectionNumber == section + 1 }
-                    val lunchRangeText = if (beforeSlot != null && afterSlot != null) {
-                        "${beforeSlot.endLabel()}-${afterSlot.startLabel()}"
-                    } else {
-                        ""
-                    }
-                    val lunchElapsed = if (highlightCurrentSection && beforeSlot != null && afterSlot != null) {
+                if (resolvedLunchBreak != null && resolvedLunchBreak.afterSection == section && lunchBreakHeight > 0.dp) {
+                    val lunchRangeText = resolvedLunchBreak.axisRangeText
+                    val startMins = parseClockMinutes(resolvedLunchBreak.startLabel)
+                    val endMins = parseClockMinutes(resolvedLunchBreak.endLabel)
+                    val lunchElapsed = if (highlightCurrentSection && startMins != null && endMins != null) {
                         val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
                         val nowSec = cal.get(Calendar.HOUR_OF_DAY) * 3600 + cal.get(Calendar.MINUTE) * 60 + cal.get(Calendar.SECOND)
-                        val startSec = beforeSlot.endHour * 3600 + beforeSlot.endMinute * 60
-                        val endSec = afterSlot.startHour * 3600 + afterSlot.startMinute * 60
+                        val startSec = startMins * 60
+                        val endSec = endMins * 60
                         when {
                             endSec <= startSec -> 0f
                             nowSec >= endSec -> 1f
@@ -1628,7 +1621,6 @@ private fun SectionTimeAxisColumn(
                                     topLeft = Offset.Zero,
                                     size = Size(size.width, py),
                                 )
-
                             }
                         }
                         Column(
@@ -1636,7 +1628,7 @@ private fun SectionTimeAxisColumn(
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Text(
-                                text = "午休",
+                                text = resolvedLunchBreak.title,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp,
                                 lineHeight = 11.sp,
@@ -2032,3 +2024,13 @@ private fun CourseGridCard(
         }
     }
 }
+
+private fun parseClockMinutes(clock: String): Int? {
+    val parts = clock.trim().split(":")
+    if (parts.size != 2) return null
+    val hour = parts[0].toIntOrNull() ?: return null
+    val minute = parts[1].toIntOrNull() ?: return null
+    if (hour !in 0..23 || minute !in 0..59) return null
+    return hour * 60 + minute
+}
+

@@ -73,10 +73,15 @@ data class AppSettings(
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     val useDynamicColor: Boolean = true,
     val compactMode: Boolean = false,
-    val showMorningExercise: Boolean = true,
-    val extraBannerTitle: String = "早锻炼附加时段",
+    val showMorningExercise: Boolean = false,
+    val extraBannerTitle: String = "",
     val extraBannerStartTime: String = "06:40",
     val extraBannerEndTime: String = "07:30",
+    val showLunchBreak: Boolean = false,
+    val lunchBreakTitle: String = "午休",
+    val lunchAfterSection: Int = 4,
+    val lunchBreakStartTime: String = "",
+    val lunchBreakEndTime: String = "",
     val showNonCurrentWeekCourses: Boolean = true,
     val showWeekend: Boolean = true,
     val weekStartDay: WeekStartDay = WeekStartDay.MONDAY,
@@ -116,6 +121,11 @@ class UserPreferencesRepository(private val context: Context) {
         val EXTRA_BANNER_TITLE = stringPreferencesKey("extra_banner_title")
         val EXTRA_BANNER_START_TIME = stringPreferencesKey("extra_banner_start_time")
         val EXTRA_BANNER_END_TIME = stringPreferencesKey("extra_banner_end_time")
+        val SHOW_LUNCH_BREAK = booleanPreferencesKey("show_lunch_break")
+        val LUNCH_BREAK_TITLE = stringPreferencesKey("lunch_break_title")
+        val LUNCH_AFTER_SECTION = intPreferencesKey("lunch_after_section")
+        val LUNCH_BREAK_START_TIME = stringPreferencesKey("lunch_break_start_time")
+        val LUNCH_BREAK_END_TIME = stringPreferencesKey("lunch_break_end_time")
         val SHOW_NON_CURRENT_WEEK = booleanPreferencesKey("show_non_current_week")
         val SHOW_WEEKEND = booleanPreferencesKey("show_weekend")
         val WEEK_START_DAY = stringPreferencesKey("week_start_day")
@@ -172,10 +182,15 @@ class UserPreferencesRepository(private val context: Context) {
             themeMode = theme,
             useDynamicColor = prefs[Keys.USE_DYNAMIC_COLOR] ?: true,
             compactMode = prefs[Keys.COMPACT_MODE] ?: false,
-            showMorningExercise = prefs[Keys.SHOW_MORNING_EXERCISE] ?: true,
-            extraBannerTitle = prefs[Keys.EXTRA_BANNER_TITLE]?.takeIf { it.isNotBlank() } ?: "早锻炼附加时段",
+            showMorningExercise = prefs[Keys.SHOW_MORNING_EXERCISE] ?: false,
+            extraBannerTitle = prefs[Keys.EXTRA_BANNER_TITLE]?.trim().orEmpty(),
             extraBannerStartTime = prefs[Keys.EXTRA_BANNER_START_TIME]?.takeIf { it.isNotBlank() } ?: "06:40",
             extraBannerEndTime = prefs[Keys.EXTRA_BANNER_END_TIME]?.takeIf { it.isNotBlank() } ?: "07:30",
+            showLunchBreak = prefs[Keys.SHOW_LUNCH_BREAK] ?: false,
+            lunchBreakTitle = prefs[Keys.LUNCH_BREAK_TITLE]?.takeIf { it.isNotBlank() } ?: "午休",
+            lunchAfterSection = (prefs[Keys.LUNCH_AFTER_SECTION] ?: 4).coerceIn(1, 15),
+            lunchBreakStartTime = prefs[Keys.LUNCH_BREAK_START_TIME]?.trim().orEmpty(),
+            lunchBreakEndTime = prefs[Keys.LUNCH_BREAK_END_TIME]?.trim().orEmpty(),
             showNonCurrentWeekCourses = prefs[Keys.SHOW_NON_CURRENT_WEEK] ?: true,
             showWeekend = prefs[Keys.SHOW_WEEKEND] ?: true,
             weekStartDay = weekStartDay,
@@ -235,9 +250,27 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setExtraBannerConfig(title: String, startTime: String, endTime: String) {
         context.userPreferencesDataStore.edit { prefs ->
-            prefs[Keys.EXTRA_BANNER_TITLE] = title.trim().ifEmpty { "早锻炼附加时段" }
+            prefs[Keys.EXTRA_BANNER_TITLE] = title.trim()
             prefs[Keys.EXTRA_BANNER_START_TIME] = startTime.trim().ifEmpty { "06:40" }
             prefs[Keys.EXTRA_BANNER_END_TIME] = endTime.trim().ifEmpty { "07:30" }
+        }
+    }
+
+    suspend fun setShowLunchBreak(enabled: Boolean) {
+        context.userPreferencesDataStore.edit { it[Keys.SHOW_LUNCH_BREAK] = enabled }
+    }
+
+    suspend fun setLunchBreakConfig(
+        title: String,
+        afterSection: Int,
+        startTime: String,
+        endTime: String,
+    ) {
+        context.userPreferencesDataStore.edit { prefs ->
+            prefs[Keys.LUNCH_BREAK_TITLE] = title.trim().ifEmpty { "午休" }
+            prefs[Keys.LUNCH_AFTER_SECTION] = afterSection.coerceIn(1, 15)
+            prefs[Keys.LUNCH_BREAK_START_TIME] = startTime.trim()
+            prefs[Keys.LUNCH_BREAK_END_TIME] = endTime.trim()
         }
     }
 

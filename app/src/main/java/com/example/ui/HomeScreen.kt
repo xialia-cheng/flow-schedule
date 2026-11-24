@@ -88,6 +88,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.CustomScheduleTag
@@ -99,6 +101,8 @@ import com.example.ui.components.HeroLiveCard
 import com.example.ui.components.ScheduleEditorSheet
 import com.example.ui.components.ScheduleItemCard
 import com.example.ui.components.ScheduleListSectionHeader
+import com.example.ui.components.SmartCaptureFab
+import com.example.ui.components.rememberScrollAwareFabState
 import com.example.ui.theme.FlowMotion
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
@@ -116,16 +120,34 @@ fun HomeScreen(
     val swipeThresholdPx = remember(density) { with(density) { 64.dp.toPx() } }
     var horizontalDragTotal by remember { mutableFloatStateOf(0f) }
     var showCustomTagManager by remember { mutableStateOf(false) }
+    val fabScrollState = rememberScrollAwareFabState()
+    val compactListState = rememberLazyListState()
+
+    androidx.compose.runtime.LaunchedEffect(state.selectedDateMillis, state.selectedFilter) {
+        fabScrollState.expand()
+    }
+    androidx.compose.runtime.LaunchedEffect(
+        compactListState.firstVisibleItemIndex,
+        compactListState.firstVisibleItemScrollOffset,
+    ) {
+        if (compactListState.firstVisibleItemIndex == 0 && compactListState.firstVisibleItemScrollOffset <= 12) {
+            fabScrollState.expand()
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(innerPadding),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
                 .pointerInput(state.selectedDateMillis) {
                     detectHorizontalDragGestures(
                         onDragStart = { horizontalDragTotal = 0f },
@@ -163,7 +185,6 @@ fun HomeScreen(
                         permissionsReady = state.permissionStatus.allRecommendedGranted,
                         onJumpToday = { viewModel.jumpToToday() },
                         onOpenPermissions = { viewModel.openPermissionSheet() },
-                        onOpenSmartCapture = onOpenSmartCapture,
                         onAddSchedule = { viewModel.openNewScheduleEditor() },
                     )
 
@@ -184,11 +205,12 @@ fun HomeScreen(
                 color = colorScheme.outlineVariant.copy(alpha = 0.6f),
             )
 
-            // Scrollable schedule content below the pinned header — bottom-right is completely free of FABs
+            // Scrollable schedule content below the pinned header
             BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .nestedScroll(fabScrollState.nestedScrollConnection),
             ) {
                 val isExpanded = maxWidth >= 700.dp
 
@@ -204,7 +226,7 @@ fun HomeScreen(
                                 .weight(0.45f)
                                 .fillMaxHeight(),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
-                            contentPadding = PaddingValues(bottom = 24.dp),
+                            contentPadding = PaddingValues(bottom = 84.dp),
                         ) {
                             item {
                                 TodaySummaryCard(
@@ -240,6 +262,7 @@ fun HomeScreen(
                     }
                 } else {
                     LazyColumn(
+                        state = compactListState,
                         modifier = Modifier
                             .fillMaxSize()
                             .testTag("home_schedule_list"),
@@ -247,7 +270,7 @@ fun HomeScreen(
                             start = 16.dp,
                             end = 16.dp,
                             top = 12.dp,
-                            bottom = 28.dp,
+                            bottom = 84.dp,
                         ),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
@@ -302,6 +325,16 @@ fun HomeScreen(
                     }
                 }
             }
+            }
+
+            // Unified sparkle trigger button (bottom-right) with spring rebound & scroll collapse/expand
+            SmartCaptureFab(
+                visible = fabScrollState.isVisible,
+                contentDescription = "一句话智能创建日程",
+                testTag = "schedule_smart_capture_fab",
+                onClick = onOpenSmartCapture,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
         }
     }
 
@@ -405,7 +438,6 @@ private fun TopHeaderRow(
     permissionsReady: Boolean,
     onJumpToday: () -> Unit,
     onOpenPermissions: () -> Unit,
-    onOpenSmartCapture: () -> Unit,
     onAddSchedule: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -504,26 +536,6 @@ private fun TopHeaderRow(
                         contentDescription = stringResource(R.string.cd_open_permissions),
                         tint = flowColors.upcomingAccent,
                         modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-
-            // Compact sparkle AI one-sentence quick capture entry in top bar right
-            Surface(
-                onClick = onOpenSmartCapture,
-                shape = CircleShape,
-                color = colorScheme.secondaryContainer,
-                modifier = Modifier
-                    .size(40.dp)
-                    .minimumInteractiveComponentSize()
-                    .testTag("schedule_smart_capture_button"),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoAwesome,
-                        contentDescription = "一句话智能创建日程",
-                        tint = colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(19.dp),
                     )
                 }
             }
@@ -1027,7 +1039,7 @@ private fun ScheduleTimelinePane(
     LazyColumn(
         modifier = modifier.testTag("home_schedule_list"),
         verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = PaddingValues(bottom = 84.dp),
     ) {
         item(key = "filter_row") {
             FilterChipsRow(
@@ -1134,9 +1146,9 @@ private fun EmptyScheduleCard(
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = if (isCustomNonToday) {
-                    "左右滑动可切换前一天 / 后一天，或点击右上角「+ 新建」/ ✨ 添加日程"
+                    "左右滑动可切换前一天 / 后一天，或点击右上角「+ 新建」/ 右下角 ✨ 添加日程"
                 } else {
-                    "点击右上角「+ 新建」或 ✨ 一句话快速创建你的下一条日程"
+                    "点击右上角「+ 新建」或右下角 ✨ 一句话快速创建你的下一条日程"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = colorScheme.onSurfaceVariant,

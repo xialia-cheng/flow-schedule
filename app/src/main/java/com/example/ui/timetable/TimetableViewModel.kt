@@ -51,7 +51,54 @@ data class TimetableUiState(
         get() = DateTimeUtils.isoDayOfWeek(selectedDateMillis)
 
     val isMorningExerciseCheckedToday: Boolean
-        get() = settings.morningExerciseCheckedDate == DateTimeUtils.formatDateKey(nowMillis)
+        get() = settings.showMorningExercise &&
+            settings.morningExerciseCheckedDate == DateTimeUtils.formatDateKey(nowMillis)
+}
+
+data class ResolvedLunchBreak(
+    val title: String,
+    val afterSection: Int,
+    val startLabel: String,
+    val endLabel: String,
+) {
+    val gridDisplayText: String
+        get() = if (startLabel.isNotBlank() && endLabel.isNotBlank()) {
+            "$title · $startLabel - $endLabel"
+        } else {
+            title
+        }
+
+    val axisRangeText: String
+        get() = if (startLabel.isNotBlank() && endLabel.isNotBlank()) {
+            "$startLabel-$endLabel"
+        } else {
+            ""
+        }
+}
+
+fun resolveLunchBreak(
+    settings: AppSettings,
+    sectionTimes: List<SectionTimeEntity>,
+    sectionCount: Int,
+): ResolvedLunchBreak? {
+    if (!settings.showLunchBreak || sectionCount < 2) return null
+    val safeAfter = settings.lunchAfterSection.coerceIn(1, (sectionCount - 1).coerceAtLeast(1))
+    val title = settings.lunchBreakTitle.trim().ifEmpty { "午休" }
+    val customStart = settings.lunchBreakStartTime.trim()
+    val customEnd = settings.lunchBreakEndTime.trim()
+    val beforeSlot = sectionTimes.find { it.sectionNumber == safeAfter }
+    val afterSlot = sectionTimes.find { it.sectionNumber == safeAfter + 1 }
+    val (startLabel, endLabel) = when {
+        customStart.isNotBlank() && customEnd.isNotBlank() -> customStart to customEnd
+        beforeSlot != null && afterSlot != null -> beforeSlot.endLabel() to afterSlot.startLabel()
+        else -> "" to ""
+    }
+    return ResolvedLunchBreak(
+        title = title,
+        afterSection = safeAfter,
+        startLabel = startLabel,
+        endLabel = endLabel,
+    )
 }
 
 class TimetableViewModel(
@@ -359,10 +406,12 @@ class TimetableViewModel(
     }
 
     fun toggleMorningExerciseCheckIn() {
+        val currentSettings = uiState.value.settings
+        if (!currentSettings.showMorningExercise) return
         viewModelScope.launch {
             val todayKey = DateTimeUtils.formatDateKey(System.currentTimeMillis())
             val checked = uiState.value.isMorningExerciseCheckedToday
-            val bannerTitle = uiState.value.settings.extraBannerTitle
+            val bannerTitle = currentSettings.extraBannerTitle.ifBlank { "附加时段" }
             preferencesRepository.setMorningExerciseCheckedDate(if (checked) "" else todayKey)
             emitMessage(if (checked) "已取消今日「$bannerTitle」打卡" else "今日「$bannerTitle」已完成打卡")
         }
@@ -398,6 +447,18 @@ class TimetableViewModel(
         viewModelScope.launch {
             preferencesRepository.setExtraBannerConfig(title, startTime, endTime)
             emitMessage("附加时段条已更新")
+        }
+    }
+
+    fun setShowLunchBreak(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setShowLunchBreak(enabled)
+        }
+    }
+
+    fun setLunchBreakConfig(title: String, afterSection: Int, startTime: String, endTime: String) {
+        viewModelScope.launch {
+            preferencesRepository.setLunchBreakConfig(title, afterSection, startTime, endTime)
         }
     }
 

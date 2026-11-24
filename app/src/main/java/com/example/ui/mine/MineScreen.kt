@@ -629,11 +629,30 @@ fun MineScreen(
                                 testTag = "mine_switch_compact",
                             )
                             MineSwitchRow(
-                                title = "顶部附加时段条（${settings.extraBannerTitle}）",
-                                subtitle = "当前时段 ${settings.extraBannerStartTime} - ${settings.extraBannerEndTime}，可在课表设置中自定义",
+                                title = if (settings.extraBannerTitle.isNotBlank()) {
+                                    "顶部附加时段条（${settings.extraBannerTitle}）"
+                                } else {
+                                    "顶部附加时段条"
+                                },
+                                subtitle = if (settings.showMorningExercise) {
+                                    "当前时段 ${settings.extraBannerStartTime} - ${settings.extraBannerEndTime}，可在课表设置中自定义"
+                                } else {
+                                    "默认关闭；开启后在周视图顶部显示自定义打卡时段"
+                                },
                                 checked = settings.showMorningExercise,
                                 onCheckedChange = { timetableViewModel.setShowMorningExercise(it) },
                                 testTag = "mine_switch_morning",
+                            )
+                            MineSwitchRow(
+                                title = "课间午休分隔带（${settings.lunchBreakTitle.ifBlank { "午休" }}）",
+                                subtitle = if (settings.showLunchBreak) {
+                                    "当前显示在第 ${settings.lunchAfterSection} 节后，可在课表设置中自定义"
+                                } else {
+                                    "默认关闭；开启后在指定节次之间插入午休分隔带"
+                                },
+                                checked = settings.showLunchBreak,
+                                onCheckedChange = { timetableViewModel.setShowLunchBreak(it) },
+                                testTag = "mine_switch_lunch_break",
                             )
                             MineSwitchRow(
                                 title = "显示周末列（周六、周日）",

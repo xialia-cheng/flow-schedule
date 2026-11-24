@@ -1190,5 +1190,127 @@ class ExampleRobolectricTest {
         val sameVersionResult = checker.parseLatestReleaseJson(newerReleaseJson, currentVersion = "2.2.0")
         assertTrue(sameVersionResult is com.example.update.UpdateCheckResult.UpToDate)
     }
+
+    @Test
+    fun `optional timetable bands default off and lunch break resolver supports full customization`() {
+        val defaults = com.example.data.AppSettings()
+        assertFalse(defaults.showMorningExercise)
+        assertEquals("", defaults.extraBannerTitle)
+        assertFalse(defaults.showLunchBreak)
+        assertEquals("午休", defaults.lunchBreakTitle)
+        assertEquals(4, defaults.lunchAfterSection)
+
+        val defaultSections = CourseColorPalette.defaultSectionTimes(1L)
+        assertNull(
+            com.example.ui.timetable.resolveLunchBreak(
+                settings = defaults,
+                sectionTimes = defaultSections,
+                sectionCount = defaultSections.size,
+            ),
+        )
+
+        val enabledAuto = defaults.copy(showLunchBreak = true)
+        val resolvedAuto = com.example.ui.timetable.resolveLunchBreak(
+            settings = enabledAuto,
+            sectionTimes = defaultSections,
+            sectionCount = defaultSections.size,
+        )
+        assertNotNull(resolvedAuto)
+        assertEquals("午休", resolvedAuto!!.title)
+        assertEquals(4, resolvedAuto.afterSection)
+        assertEquals("11:40", resolvedAuto.startLabel)
+        assertEquals("14:00", resolvedAuto.endLabel)
+        assertEquals("午休 · 11:40 - 14:00", resolvedAuto.gridDisplayText)
+        assertEquals("11:40-14:00", resolvedAuto.axisRangeText)
+
+        val customLunch = defaults.copy(
+            showLunchBreak = true,
+            lunchBreakTitle = "午间休息",
+            lunchAfterSection = 5,
+            lunchBreakStartTime = "12:15",
+            lunchBreakEndTime = "13:45",
+        )
+        val resolvedCustom = com.example.ui.timetable.resolveLunchBreak(
+            settings = customLunch,
+            sectionTimes = defaultSections,
+            sectionCount = defaultSections.size,
+        )
+        assertNotNull(resolvedCustom)
+        assertEquals("午间休息", resolvedCustom!!.title)
+        assertEquals(5, resolvedCustom.afterSection)
+        assertEquals("12:15", resolvedCustom.startLabel)
+        assertEquals("13:45", resolvedCustom.endLabel)
+        assertEquals("午间休息 · 12:15 - 13:45", resolvedCustom.gridDisplayText)
+
+        // Clamps out-of-range afterSection to sectionCount - 1
+        val clamped = com.example.ui.timetable.resolveLunchBreak(
+            settings = customLunch.copy(lunchAfterSection = 99),
+            sectionTimes = defaultSections.take(8),
+            sectionCount = 8,
+        )
+        assertNotNull(clamped)
+        assertEquals(7, clamped!!.afterSection)
+    }
+
+    @Test
+    fun `scroll aware fab collapses on downward scroll and expands on upward scroll`() {
+        val fabState = com.example.ui.components.ScrollAwareFabState(
+            initialVisible = true,
+            thresholdPx = 20f,
+        )
+        val conn = fabState.nestedScrollConnection
+
+        // 1. Non-scrollable zero consumed delta leaves FAB visible
+        conn.onPostScroll(
+            consumed = androidx.compose.ui.geometry.Offset.Zero,
+            available = androidx.compose.ui.geometry.Offset(0f, -60f),
+            source = androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput,
+        )
+        assertTrue(fabState.isVisible)
+
+        // 2. Small jitter below threshold does not collapse FAB
+        conn.onPostScroll(
+            consumed = androidx.compose.ui.geometry.Offset(0f, -12f),
+            available = androidx.compose.ui.geometry.Offset.Zero,
+            source = androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput,
+        )
+        assertTrue(fabState.isVisible)
+
+        // 3. Continuing downward scroll past threshold collapses FAB
+        conn.onPostScroll(
+            consumed = androidx.compose.ui.geometry.Offset(0f, -14f),
+            available = androidx.compose.ui.geometry.Offset.Zero,
+            source = androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput,
+        )
+        assertFalse(fabState.isVisible)
+
+        // 4. Fling/SideEffect alone does not flicker visibility
+        conn.onPostScroll(
+            consumed = androidx.compose.ui.geometry.Offset(0f, 40f),
+            available = androidx.compose.ui.geometry.Offset.Zero,
+            source = androidx.compose.ui.input.nestedscroll.NestedScrollSource.SideEffect,
+        )
+        assertFalse(fabState.isVisible)
+
+        // 5. Scrolling back up past threshold expands FAB
+        conn.onPostScroll(
+            consumed = androidx.compose.ui.geometry.Offset(0f, 24f),
+            available = androidx.compose.ui.geometry.Offset.Zero,
+            source = androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput,
+        )
+        assertTrue(fabState.isVisible)
+
+        // 6. Collapse and verify explicit expand() restores visibility
+        conn.onPostScroll(
+            consumed = androidx.compose.ui.geometry.Offset(0f, -25f),
+            available = androidx.compose.ui.geometry.Offset.Zero,
+            source = androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput,
+        )
+        assertFalse(fabState.isVisible)
+        fabState.expand()
+        assertTrue(fabState.isVisible)
+    }
 }
+
+
 
