@@ -1,31 +1,72 @@
-# 微澜日程（RipplePlan）
+<p align="center">
+  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="144" height="144" alt="微澜日程应用图标">
+</p>
 
-微澜日程是一款坚持「本地优先 · 零数据收集」的原生 Android 课程表与日程管理应用，面向高校课表管理、每日待办提醒、沉浸专注计时以及 Android 16+ 实况胶囊体验设计。
+<h1 align="center">微澜日程 · RipplePlan</h1>
 
-开源仓库：https://github.com/xialia-cheng/ripple-plan
+<p align="center">
+  面向校园生活的开源 Android 课表与日程应用。<br>
+  在一个地方看课表、记待办、开专注计时。界面简洁，全程无广告。
+</p>
 
-本项目采用 [MIT 开源许可证](LICENSE)。
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-4d669a" alt="MIT 开源许可证"></a>
+  <a href="https://github.com/xialia-cheng/ripple-plan/releases/latest"><img src="https://img.shields.io/github/v/release/xialia-cheng/ripple-plan?sort=date&amp;label=Release&amp;color=4d669a" alt="最新发布版本"></a>
+  <a href="#下载"><img src="https://img.shields.io/badge/Android-7.0%2B-38765e?logo=android&amp;logoColor=white" alt="支持 Android 7.0 及以上版本"></a>
+</p>
 
-## 核心特性
+<p align="center">
+  <img src="https://img.shields.io/badge/Kotlin-7652a4?logo=kotlin&amp;logoColor=white" alt="Kotlin">
+  <img src="https://img.shields.io/badge/Jetpack%20Compose-4d669a?logo=jetpackcompose&amp;logoColor=white" alt="Jetpack Compose">
+</p>
 
-- **自由自定义课表**：支持多课表切换、6–16 节逐节自定义作息时间、批量推算、非连续周次方格点选、自定义学期总周数、周起始日（周一/周日）、隐藏周末、16 种高区分度配色与 Hex 自定义色、防误触只读/编辑双模式与平滑左右翻周。
-- **日程管理与自定义标签**：支持分组待办、重复规则（不重复 / 每日 / 工作日 / 每周）、自定义分类标签（可增删改名与选色），以及防误触顶部操作栏。
-- **一句话智能创建**：默认使用纯本地离线中文自然语言解析（支持日期/早八/节次/@地点/提前提醒/免打扰关键词）；也支持在「我的」中可选配置兼容 OpenAI 协议的个人 HTTPS 接口。
-- **专注学习、小组件与版本检查**：支持自定义专注/休息时长与事件名称，可联动通知与系统免打扰级别，提供 Jetpack Glance 桌面小组件，并支持基于 GitHub Releases 的可控版本检查（支持浏览器下载与 24 小时启动节流）。
+<p align="center">
+  <a href="#下载"><strong>下载</strong></a> ·
+  <a href="#功能">功能</a> ·
+  <a href="#实况通知">实况通知</a> ·
+  <a href="#隐私与联网">隐私与联网</a> ·
+  <a href="#从源码构建">从源码构建</a>
+</p>
 
-## 跨机型实况通知（Live Updates）兼容性说明
+---
 
-基于 Android 16+ 原生 Live Updates（实时更新）接口实现，支持已接入该标准的系统级胶囊（如 ColorOS 流体云等），其余系统自动降级为标准常驻进度通知：
+## 下载
 
-1. **标准协议实现**：使用 `Notification.ProgressStyle`、`Notification.EXTRA_REQUEST_PROMOTED_ONGOING` 与系统原生倒计时 `Chronometer` + `setTimeoutAfter(...)`，根据当前课程/日程配色动态绑定分段进度条与通知颜色。
-2. **全机型自动适配与降级保障**：在已接入 Android 16 原生 `Live Updates` 规范的系统上无需私有 SDK 即可自动适配展示状态栏实况胶囊；在 Android 15 及以下或未开放胶囊的系统上，自动降级为**标准高优先级常驻进度倒计时通知**（含通知栏倒计时、分段进度条与免打扰/立即结束操作），核心精确闹钟（`AlarmManager`）与提醒功能完全不受影响。
+打开 **[GitHub 最新发布](https://github.com/xialia-cheng/ripple-plan/releases/latest)**，在 **Assets** 中下载 `app-release.apk`。应用支持 **Android 7.0（API 24）及以上版本**。
 
-## 隐私与网络设计（本地优先 · 零数据收集）
+如果系统将「微澜日程」和旧版「流云日程」识别为两个应用，请先在旧版导出 JSON 备份，再在新版导入并核对恢复结果。
 
-- **本地优先 · 零数据收集**：全部课表、作息、日程与专注记录均保存在设备本地 Room 数据库与 DataStore 中，无自建服务器、无第三方账号登录，也无任何统计埋点或广告 SDK。
-- **唯二可控联网场景（用户完全可控）**：
-  1. **检查版本更新**：仅向 GitHub 公开 Releases 接口（`https://api.github.com/repos/xialia-cheng/ripple-plan/releases/latest`）发起只读请求获取最新版本号与更新日志，不上传任何设备标识或个人课表数据；在「我的」中关闭「启动时自动检查更新」后即可保持完全零联网运行。
-  2. **自定义 AI 解析（默认关闭）**：仅当用户主动开启并填写自己的 `https://` 接口后，才会在触发“一句话创建”的当次发送单次输入文本，绝不上传本地已有课表或日程。
-- **密钥与传输安全**：可选的自定义 AI API Key 仅通过 Android Keystore（AES-256-GCM）硬件级密钥加密保存于本地，且已通过 `backup_rules.xml` 与 `data_extraction_rules.xml` 从云备份和设备迁移中排除；自定义 Base URL 强制要求 `https://` 加密连接。
-- **锁屏隐私保护**：实时活动通知默认采用锁屏隐私模式（`VISIBILITY_PRIVATE`），默认不在锁屏界面直接暴露具体教室、教师姓名与日程备注，可在「通知与免打扰设置」中按需手动开启。
-- **本地 JSON 备份提醒**：导出的本地 JSON 备份文件为明文结构（包含课程地点、教师与日程备注，不包含 API Key），请妥善保管并避免上传至公开网盘；恢复时默认智能合并去重，也可选择覆盖恢复。
+## 功能
+
+- **课表**　支持多课表、单双周与不连续周次，自定义学期、每周起始日和 6–16 节上课时间。可设置课程配色，日常查看时也可切换到只读模式。
+- **日程与提醒**　管理分组待办和自定义标签，可设置每日、工作日或每周重复提醒。
+- **一句话录入**　例如输入「明天下午三点在图书馆自习，提前十分钟提醒」，即可在设备上解析日期、地点和提醒时间。
+- **专注与小组件**　可设定专注和休息时长，按需联动系统勿扰模式，也可在桌面小组件中查看当天安排。
+- **本地备份**　支持导出 JSON，恢复时可选择合并去重或覆盖导入。
+
+## 实况通知
+
+在支持 Android 16 Live Updates 的设备上，课程、日程和专注倒计时可以显示为系统实况胶囊，包括兼容的 ColorOS 流体云。在 Android 15 及以下版本或系统不提供实况胶囊时，应用使用通知栏进度提醒。实际显示与提醒时效取决于机型、系统版本与通知和精确闹钟权限。
+
+## 隐私与联网
+
+课表、日程和专注记录默认保存在设备上。核心功能离线可用，应用无广告、无统计埋点，无需登录账号。
+
+- **版本检查**　向 GitHub Releases 请求公开版本信息。可在「我的」中关闭启动时自动检查更新。
+- **自定义 AI 解析**　默认关闭。启用后，使用一句话录入时，应用会把当次输入和解析所需的时间等上下文发送到你配置的 HTTPS 服务。已有课表和日程保留在设备上。API Key 通过 Android Keystore 加密保存，相关设置已从系统备份和设备迁移规则中排除。
+- **锁屏与导出**　锁屏默认隐藏地点、教师和备注等详情。手动导出的 JSON 备份包含课表和日程等明文数据，不含 API Key，请自行保管。
+
+## 从源码构建
+
+需要 **JDK 21**、**Gradle 9.3.1** 和 **Android SDK 36.1**。在仓库根目录执行以下命令。已有本地调试签名文件 `debug.keystore` 时，从第二条命令开始执行。
+
+```sh
+keytool -genkeypair -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+gradle :app:assembleDebug
+```
+
+调试 APK 位于 `app/build/outputs/apk/debug/`。执行 `gradle :app:testDebugUnitTest :app:lintDebug` 可运行单元测试和 lint。正式包的构建步骤见 [GitHub Actions 工作流](.github/workflows/main.yml)。
+
+## 许可证与反馈
+
+微澜日程由开发者与 AI 协作开发，项目源码采用 **[MIT 开源许可证](LICENSE)**。使用中遇到问题或有功能建议，欢迎在 [GitHub Issues](https://github.com/xialia-cheng/ripple-plan/issues) 反馈。如果你觉得微澜日程实用，欢迎给仓库点一颗 Star。
