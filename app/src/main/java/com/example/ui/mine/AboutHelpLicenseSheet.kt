@@ -25,8 +25,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Email
@@ -35,7 +33,6 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,7 +52,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -102,8 +98,6 @@ SOFTWARE.
 @Composable
 fun AboutHelpLicenseSheet(
     updateState: AppUpdateUiState = AppUpdateUiState(),
-    hasActiveTestSchedule: Boolean = false,
-    onTriggerFluidCloudTest: (() -> Unit)? = null,
     onCheckUpdates: () -> Unit = {},
     onDismiss: () -> Unit,
     onShowMessage: (String) -> Unit,
@@ -114,7 +108,6 @@ fun AboutHelpLicenseSheet(
     val context = LocalContext.current
     val haptics = rememberAppHaptics()
     var licenseExpanded by rememberSaveable { mutableStateOf(false) }
-    var debugExpanded by rememberSaveable { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -550,159 +543,6 @@ fun AboutHelpLicenseSheet(
                         }
                     }
                 }
-            }
-
-            if (onTriggerFluidCloudTest != null) {
-                // 5. 开发者选项与实况演练（默认折叠收纳）
-                AboutSectionCard(
-                    icon = Icons.Rounded.BugReport,
-                    title = "5. 开发者诊断与实况演练",
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Surface(
-                            shape = MaterialTheme.shapes.medium,
-                            color = colorScheme.surfaceContainerLow,
-                            border = BorderStroke(1.dp, colorScheme.outlineVariant),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = 48.dp)
-                                .clip(MaterialTheme.shapes.medium)
-                                .clickable {
-                                    haptics.tick()
-                                    debugExpanded = !debugExpanded
-                                }
-                                .testTag("mine_fluid_cloud_debug_toggle"),
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "实况通知调试与效果演练",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = colorScheme.onSurface,
-                                    )
-                                    Text(
-                                        text = if (debugExpanded) "点击收起调试面板" else "展开以触发 1 分钟状态栏实况胶囊或实时进度通知测试",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                Icon(
-                                    imageVector = if (debugExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                                    contentDescription = if (debugExpanded) "收起调试区" else "展开调试区",
-                                    tint = colorScheme.primary,
-                                )
-                            }
-                        }
-
-                        AnimatedVisibility(
-                            visible = debugExpanded,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut(),
-                        ) {
-                            FluidCloudTestCard(
-                                hasActiveTest = hasActiveTestSchedule,
-                                onTriggerTest = {
-                                    onTriggerFluidCloudTest()
-                                    onDismiss()
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FluidCloudTestCard(
-    hasActiveTest: Boolean,
-    onTriggerTest: () -> Unit,
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val flowColors = FlowTheme.colors
-    val haptics = rememberAppHaptics()
-    val shape = MaterialTheme.shapes.medium
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .clickable {
-                haptics.tick()
-                onTriggerTest()
-            }
-            .testTag("mine_test_fluid_cloud_button"),
-        shape = shape,
-        color = colorScheme.surfaceContainerLow,
-        border = BorderStroke(
-            width = 1.dp,
-            brush = Brush.horizontalGradient(
-                colors = listOf(
-                    flowColors.secondaryAccent.copy(alpha = 0.55f),
-                    flowColors.liveAccent.copy(alpha = 0.55f),
-                ),
-            ),
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(colorScheme.primary.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.AutoAwesome,
-                    contentDescription = null,
-                    tint = colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.test_fluid_cloud_btn),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = colorScheme.onSurface,
-                )
-                Text(
-                    text = if (hasActiveTest) {
-                        "1 分钟测试正在实况通知中倒计时，点击可重新发起"
-                    } else {
-                        "触发 1 分钟倒计时（含 @地点、分段进度条与快捷操作）"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colorScheme.onSurfaceVariant,
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(colorScheme.primary),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = "发起实况通知测试",
-                    tint = colorScheme.onPrimary,
-                    modifier = Modifier.size(18.dp),
-                )
             }
         }
     }
