@@ -5,6 +5,7 @@ import com.example.notification.LiveUpdateCoordinator
 import com.example.notification.ScheduleAlarmScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 
@@ -26,6 +27,7 @@ class TimetableRepository(
     private val alarmScheduler: ScheduleAlarmScheduler,
     private val liveUpdateCoordinator: LiveUpdateCoordinator,
     private val database: ScheduleDatabase? = null,
+    private val preferencesRepository: UserPreferencesRepository? = null,
 ) {
     val allTimetables: Flow<List<TimetableEntity>> = timetableDao.observeAllTimetables()
     val activeTimetable: Flow<TimetableEntity?> = timetableDao.observeActiveTimetable()
@@ -257,12 +259,23 @@ class TimetableRepository(
         val courses = timetableDao.getAllCourses()
         val times = timetables.flatMap { timetableDao.getSectionTimes(it.id) }
         val schedules = scheduleDao.getAllSchedules()
+        val settings = preferencesRepository?.settings?.first()
+        val lunchBreakBackup = settings?.let {
+            LunchBreakBackupConfig(
+                showLunchBreak = it.showLunchBreak,
+                title = it.lunchBreakTitle,
+                afterSection = it.lunchAfterSection,
+                startTime = it.lunchBreakStartTime,
+                endTime = it.lunchBreakEndTime,
+            )
+        }
         return TimetableImportExport.exportFullBackupJson(
             FullBackupPayload(
                 timetables = timetables,
                 courses = courses,
                 sectionTimes = times,
                 schedules = schedules,
+                lunchBreakBackup = lunchBreakBackup,
             ),
         )
     }
@@ -299,6 +312,18 @@ class TimetableRepository(
             database.withTransaction { executeBlock() }
         } else {
             executeBlock()
+        }
+
+        payload.lunchBreakBackup?.let { lb ->
+            preferencesRepository?.let { prefs ->
+                prefs.setShowLunchBreak(lb.showLunchBreak)
+                prefs.setLunchBreakConfig(
+                    title = lb.title,
+                    afterSection = lb.afterSection,
+                    startTime = lb.startTime,
+                    endTime = lb.endTime,
+                )
+            }
         }
 
         liveUpdateCoordinator.syncAll(rescheduleAlarms = true)

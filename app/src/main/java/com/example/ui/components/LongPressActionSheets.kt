@@ -60,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -603,7 +604,7 @@ fun CourseLongPressSheet(
                             Icon(
                                 imageVector = Icons.Rounded.Check,
                                 contentDescription = paletteStyle.name,
-                                tint = Color.White,
+                                tint = if (swatchColor.luminance() > 0.45f) Color(0xFF0E1320) else Color.White,
                                 modifier = Modifier.size(16.dp),
                             )
                         }

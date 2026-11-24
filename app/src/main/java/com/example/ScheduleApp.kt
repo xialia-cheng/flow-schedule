@@ -45,6 +45,7 @@ class AppContainer(application: Application) {
         alarmScheduler = alarmScheduler,
         liveUpdateCoordinator = liveUpdateCoordinator,
         database = database,
+        preferencesRepository = preferencesRepository,
     )
 
     val smartCaptureOrchestrator: SmartCaptureOrchestrator = SmartCaptureOrchestrator(

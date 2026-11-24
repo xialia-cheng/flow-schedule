@@ -1,5 +1,6 @@
 package com.example.ui.timetable
 
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -58,6 +59,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -124,6 +126,7 @@ fun TimetableMoreSheet(
     onSetFluidCloudDisplayOptions: (showLocation: Boolean, showTeacher: Boolean, showNotes: Boolean) -> Unit,
     onSetFluidCloudLockscreenDetails: (Boolean) -> Unit,
     onSetThemeMode: (AppThemeMode) -> Unit,
+    onSetUseDynamicColor: (Boolean) -> Unit = {},
     onSetCompactMode: (Boolean) -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenImportExport: () -> Unit,
@@ -377,6 +380,37 @@ fun TimetableMoreSheet(
                                     selectedContainerColor = colorScheme.primaryContainer,
                                     selectedLabelColor = colorScheme.onPrimaryContainer,
                                 ),
+                            )
+                        }
+                    }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "系统壁纸动态取色",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = colorScheme.onSurface,
+                                )
+                                Text(
+                                    text = "Material You（Android 12+），关闭则采用蓝紫微光默认配色",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Switch(
+                                checked = state.settings.useDynamicColor,
+                                onCheckedChange = {
+                                    haptics.tick()
+                                    onSetUseDynamicColor(it)
+                                },
+                                modifier = Modifier.testTag("more_dynamic_color_switch"),
                             )
                         }
                     }
@@ -740,6 +774,8 @@ private fun TimetableSettingsDialog(
     var lunchEnd by remember(lunchBreakEndTime) { mutableStateOf(lunchBreakEndTime) }
 
     var showDatePicker by remember { mutableStateOf(false) }
+    var showLunchStartPicker by remember { mutableStateOf(false) }
+    var showLunchEndPicker by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1185,9 +1221,24 @@ private fun TimetableSettingsDialog(
                                         OutlinedTextField(
                                             value = lunchStart,
                                             onValueChange = { lunchStart = it },
-                                            label = { Text("开始时间（可选）") },
+                                            label = { Text("开始时间") },
                                             placeholder = { Text(autoStartPlaceholder) },
                                             singleLine = true,
+                                            trailingIcon = {
+                                                IconButton(
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        showLunchStartPicker = true
+                                                    },
+                                                    modifier = Modifier.testTag("settings_lunch_start_picker_btn"),
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Schedule,
+                                                        contentDescription = "选择分隔带开始时间",
+                                                        modifier = Modifier.size(18.dp),
+                                                    )
+                                                }
+                                            },
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .testTag("settings_lunch_break_start"),
@@ -1195,17 +1246,73 @@ private fun TimetableSettingsDialog(
                                         OutlinedTextField(
                                             value = lunchEnd,
                                             onValueChange = { lunchEnd = it },
-                                            label = { Text("结束时间（可选）") },
+                                            label = { Text("结束时间") },
                                             placeholder = { Text(autoEndPlaceholder) },
                                             singleLine = true,
+                                            trailingIcon = {
+                                                IconButton(
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        showLunchEndPicker = true
+                                                    },
+                                                    modifier = Modifier.testTag("settings_lunch_end_picker_btn"),
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Schedule,
+                                                        contentDescription = "选择分隔带结束时间",
+                                                        modifier = Modifier.size(18.dp),
+                                                    )
+                                                }
+                                            },
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .testTag("settings_lunch_break_end"),
                                         )
                                     }
 
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                haptics.tick()
+                                                lunchStart = autoStartPlaceholder
+                                                lunchEnd = autoEndPlaceholder
+                                            },
+                                            shape = CircleShape,
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                            modifier = Modifier.testTag("settings_lunch_auto_fill_button"),
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.AutoAwesome,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(15.dp),
+                                            )
+                                            Spacer(Modifier.width(5.dp))
+                                            Text(
+                                                text = "按前后节次自动填充",
+                                                style = MaterialTheme.typography.labelMedium,
+                                            )
+                                        }
+                                        if (lunchStart.isNotBlank() || lunchEnd.isNotBlank()) {
+                                            TextButton(
+                                                onClick = {
+                                                    haptics.tick()
+                                                    lunchStart = ""
+                                                    lunchEnd = ""
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                                modifier = Modifier.testTag("settings_lunch_clear_times_button"),
+                                            ) {
+                                                Text("清空（联动）", style = MaterialTheme.typography.labelMedium)
+                                            }
+                                        }
+                                    }
+
                                     Text(
-                                        text = "留空则自动取第 $safeAfter 节下课至第 ${safeAfter + 1} 节上课的间隔时间（$autoStartPlaceholder - $autoEndPlaceholder）",
+                                        text = "支持自由输入或点时钟选择；留空则自动联动第 $safeAfter 节下课至第 ${safeAfter + 1} 节上课（$autoStartPlaceholder - $autoEndPlaceholder）",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = colorScheme.onSurfaceVariant,
                                     )
@@ -1264,7 +1371,12 @@ private fun TimetableSettingsDialog(
                         onClick = {
                             haptics.confirm()
                             onSetExtraBannerConfig(bannerTitle, bannerStart, bannerEnd)
-                            onSetLunchBreakConfig(lunchTitle, lunchAfter, lunchStart, lunchEnd)
+                            onSetLunchBreakConfig(
+                                lunchTitle,
+                                lunchAfter,
+                                normalizeClockInput(lunchStart),
+                                normalizeClockInput(lunchEnd),
+                            )
                             onSave(name, startMonday, totalWeeks)
                         },
                         modifier = Modifier.testTag("settings_save_button"),
@@ -1274,6 +1386,48 @@ private fun TimetableSettingsDialog(
                 }
             }
         }
+    }
+
+    if (showLunchStartPicker) {
+        val safeAfter = lunchAfter.coerceIn(1, maxAfterSection)
+        val fallbackStart = sectionTimes.find { it.sectionNumber == safeAfter }?.endLabel() ?: "11:40"
+        val (initHour, initMin) = parseClockHourMinute(
+            lunchStart.ifBlank { fallbackStart },
+            defaultHour = 11,
+            defaultMinute = 40,
+        )
+        CompactWheelTimePickerDialog(
+            title = "分隔带开始时间",
+            initialHour = initHour,
+            initialMinute = initMin,
+            onDismiss = { showLunchStartPicker = false },
+            onConfirm = { hour, minute ->
+                lunchStart = formatClockHourMinute(hour, minute)
+                showLunchStartPicker = false
+            },
+        )
+    }
+
+    if (showLunchEndPicker) {
+        val safeAfter = lunchAfter.coerceIn(1, maxAfterSection)
+        val fallbackEnd = sectionTimes.find { it.sectionNumber == safeAfter + 1 }?.startLabel() ?: "14:00"
+        val (initHour, initMin) = parseClockHourMinute(
+            lunchEnd.ifBlank { fallbackEnd },
+            defaultHour = 14,
+            defaultMinute = 0,
+        )
+        val minAfter = parseClockHourMinuteOrNull(lunchStart)?.let { (h, m) -> h * 60 + m }
+        CompactWheelTimePickerDialog(
+            title = "分隔带结束时间",
+            initialHour = initHour,
+            initialMinute = initMin,
+            mustBeAfterTotalMinutes = minAfter,
+            onDismiss = { showLunchEndPicker = false },
+            onConfirm = { hour, minute ->
+                lunchEnd = formatClockHourMinute(hour, minute)
+                showLunchEndPicker = false
+            },
+        )
     }
 
     if (showDatePicker) {
@@ -1731,3 +1885,33 @@ private fun CourseReminderDialog(
         },
     )
 }
+
+private fun formatClockHourMinute(hour: Int, minute: Int): String {
+    return String.format("%02d:%02d", hour.coerceIn(0, 23), minute.coerceIn(0, 59))
+}
+
+private fun parseClockHourMinuteOrNull(raw: String): Pair<Int, Int>? {
+    val normalized = raw.trim().replace('：', ':')
+    if (normalized.isEmpty()) return null
+    val match = Regex("^(\\d{1,2}):(\\d{1,2})$").matchEntire(normalized) ?: return null
+    val h = match.groupValues[1].toIntOrNull() ?: return null
+    val m = match.groupValues[2].toIntOrNull() ?: return null
+    if (h !in 0..23 || m !in 0..59) return null
+    return h to m
+}
+
+private fun parseClockHourMinute(
+    raw: String,
+    defaultHour: Int,
+    defaultMinute: Int,
+): Pair<Int, Int> {
+    return parseClockHourMinuteOrNull(raw) ?: (defaultHour.coerceIn(0, 23) to defaultMinute.coerceIn(0, 59))
+}
+
+private fun normalizeClockInput(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return ""
+    val parsed = parseClockHourMinuteOrNull(trimmed)
+    return if (parsed != null) formatClockHourMinute(parsed.first, parsed.second) else trimmed
+}
+

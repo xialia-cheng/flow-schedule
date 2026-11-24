@@ -579,7 +579,7 @@ fun ScheduleItemCard(
                                     Icon(
                                         imageVector = Icons.Rounded.Check,
                                         contentDescription = null,
-                                        tint = Color.White,
+                                        tint = if (flowColors.isDark) Color(0xFF05291D) else Color.White,
                                         modifier = Modifier.size(15.dp),
                                     )
                                 }

@@ -73,12 +73,69 @@ data class ResolvedLunchBreak(
             title
         }
 
+    val compactGridDisplayText: String
+        get() = if (startLabel.isNotBlank() && endLabel.isNotBlank()) {
+            "$title · $startLabel-$endLabel"
+        } else {
+            title
+        }
+
     val axisRangeText: String
         get() = if (startLabel.isNotBlank() && endLabel.isNotBlank()) {
             "$startLabel-$endLabel"
         } else {
             ""
         }
+}
+
+data class LunchBreakLabelPlacement(
+    val startCol: Int,
+    val spanCols: Int,
+    val isOverlappingFallback: Boolean,
+)
+
+/**
+ * Finds the widest contiguous run of weekday columns NOT covered by a spanning course
+ * at the lunch break band, so the break label avoids overlapping course cards.
+ * Falls back to full-width centered placement only when every visible day has a spanning course.
+ */
+fun computeLunchBreakPlacement(
+    dayCount: Int,
+    spannedColIndices: Set<Int>,
+): LunchBreakLabelPlacement {
+    val safeDays = dayCount.coerceAtLeast(1)
+    val runs = mutableListOf<Pair<Int, Int>>()
+    var runStart = -1
+    for (col in 0 until safeDays) {
+        val blocked = col in spannedColIndices
+        if (!blocked) {
+            if (runStart == -1) runStart = col
+        } else if (runStart != -1) {
+            runs.add(runStart to (col - runStart))
+            runStart = -1
+        }
+    }
+    if (runStart != -1) {
+        runs.add(runStart to (safeDays - runStart))
+    }
+    if (runs.isEmpty()) {
+        return LunchBreakLabelPlacement(
+            startCol = 0,
+            spanCols = safeDays,
+            isOverlappingFallback = true,
+        )
+    }
+    val centerPoint = (safeDays - 1) / 2f
+    val best = runs.maxWith(
+        compareBy<Pair<Int, Int>> { it.second }
+            .thenByDescending { -kotlin.math.abs((it.first + (it.second - 1) / 2f) - centerPoint) }
+            .thenByDescending { -it.first },
+    )
+    return LunchBreakLabelPlacement(
+        startCol = best.first,
+        spanCols = best.second,
+        isOverlappingFallback = false,
+    )
 }
 
 fun resolveLunchBreak(
@@ -93,10 +150,15 @@ fun resolveLunchBreak(
     val customEnd = settings.lunchBreakEndTime.trim()
     val beforeSlot = sectionTimes.find { it.sectionNumber == safeAfter }
     val afterSlot = sectionTimes.find { it.sectionNumber == safeAfter + 1 }
-    val (startLabel, endLabel) = when {
-        customStart.isNotBlank() && customEnd.isNotBlank() -> customStart to customEnd
-        beforeSlot != null && afterSlot != null -> beforeSlot.endLabel() to afterSlot.startLabel()
-        else -> "" to ""
+    val startLabel = when {
+        customStart.isNotBlank() -> customStart
+        beforeSlot != null && (afterSlot != null || customEnd.isNotBlank()) -> beforeSlot.endLabel()
+        else -> ""
+    }
+    val endLabel = when {
+        customEnd.isNotBlank() -> customEnd
+        afterSlot != null && (beforeSlot != null || customStart.isNotBlank()) -> afterSlot.startLabel()
+        else -> ""
     }
     return ResolvedLunchBreak(
         title = title,

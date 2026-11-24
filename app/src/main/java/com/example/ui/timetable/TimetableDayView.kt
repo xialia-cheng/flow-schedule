@@ -15,6 +15,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -162,11 +163,18 @@ internal fun TimetableDayTimelineView(
                     .sortedWith(compareBy<ScheduleEntity> { it.isCompleted }.thenBy { it.startTimeMillis })
             }
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 92.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val extraSidePadding = ((maxWidth - 720.dp) / 2).coerceAtLeast(0.dp)
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 14.dp + extraSidePadding,
+                        end = 14.dp + extraSidePadding,
+                        top = 10.dp,
+                        bottom = 92.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                 // Day header summary & prev/next switcher
                 item(key = "day_header") {
                     Surface(
@@ -402,6 +410,7 @@ internal fun TimetableDayTimelineView(
                         }
                     }
                 }
+            }
             }
         }
     }

@@ -64,6 +64,7 @@ private val GeminiDarkColorScheme = darkColorScheme(
     onPrimary = OnGeminiBlue,
     primaryContainer = GeminiBlueContainer,
     onPrimaryContainer = OnGeminiBlueContainer,
+    inversePrimary = GeminiLightPrimary,
     secondary = GeminiViolet,
     onSecondary = OnGeminiViolet,
     secondaryContainer = GeminiVioletContainer,
@@ -82,13 +83,18 @@ private val GeminiDarkColorScheme = darkColorScheme(
     onSurface = DarkTextPrimary,
     surfaceVariant = GeminiSurface,
     onSurfaceVariant = DarkTextSecondary,
+    surfaceDim = GeminiSurfaceLowest,
+    surfaceBright = GeminiSurfaceHighest,
     surfaceContainerLowest = GeminiSurfaceLowest,
     surfaceContainerLow = GeminiSurfaceLow,
     surfaceContainer = GeminiSurface,
     surfaceContainerHigh = GeminiSurfaceHigh,
     surfaceContainerHighest = GeminiSurfaceHighest,
+    inverseSurface = GeminiLightSurface,
+    inverseOnSurface = LightTextPrimary,
     outline = GeminiOutline,
     outlineVariant = GeminiOutlineSubtle,
+    scrim = Color(0xFF000000),
 )
 
 private val GeminiLightColorScheme = lightColorScheme(
@@ -96,6 +102,7 @@ private val GeminiLightColorScheme = lightColorScheme(
     onPrimary = OnGeminiLightPrimary,
     primaryContainer = GeminiLightPrimaryContainer,
     onPrimaryContainer = OnGeminiLightPrimaryContainer,
+    inversePrimary = GeminiBlue,
     secondary = GeminiLightSecondary,
     onSecondary = OnGeminiLightSecondary,
     secondaryContainer = GeminiLightSecondaryContainer,
@@ -114,13 +121,18 @@ private val GeminiLightColorScheme = lightColorScheme(
     onSurface = LightTextPrimary,
     surfaceVariant = GeminiLightSurface,
     onSurfaceVariant = LightTextSecondary,
+    surfaceDim = GeminiLightSurfaceHigh,
+    surfaceBright = GeminiLightSurfaceLowest,
     surfaceContainerLowest = GeminiLightSurfaceLowest,
     surfaceContainerLow = GeminiLightSurfaceLow,
     surfaceContainer = GeminiLightSurface,
     surfaceContainerHigh = GeminiLightSurfaceHigh,
     surfaceContainerHighest = GeminiLightSurfaceHighest,
+    inverseSurface = GeminiSurface,
+    inverseOnSurface = DarkTextPrimary,
     outline = GeminiLightOutline,
     outlineVariant = GeminiLightOutlineSubtle,
+    scrim = Color(0xFF000000),
 )
 
 private fun buildExtendedColors(

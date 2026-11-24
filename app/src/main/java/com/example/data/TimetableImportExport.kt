@@ -11,11 +11,20 @@ data class ParsedTimetableImport(
     val sectionTimes: List<SectionTimeEntity> = emptyList(),
 )
 
+data class LunchBreakBackupConfig(
+    val showLunchBreak: Boolean = false,
+    val title: String = "午休",
+    val afterSection: Int = 4,
+    val startTime: String = "",
+    val endTime: String = "",
+)
+
 data class FullBackupPayload(
     val timetables: List<TimetableEntity>,
     val courses: List<CourseEntity>,
     val sectionTimes: List<SectionTimeEntity>,
     val schedules: List<ScheduleEntity>,
+    val lunchBreakBackup: LunchBreakBackupConfig? = null,
 )
 
 object TimetableImportExport {
@@ -954,7 +963,7 @@ object TimetableImportExport {
      */
     fun exportFullBackupJson(payload: FullBackupPayload): String {
         val root = JSONObject()
-        root.put("schemaVersion", 3)
+        root.put("schemaVersion", 4)
         root.put("exportedAt", System.currentTimeMillis())
 
         val ttArray = JSONArray()
@@ -1028,6 +1037,19 @@ object TimetableImportExport {
             )
         }
         root.put("schedules", scheduleArray)
+
+        payload.lunchBreakBackup?.let { lb ->
+            root.put(
+                "lunchBreak",
+                JSONObject().apply {
+                    put("showLunchBreak", lb.showLunchBreak)
+                    put("title", lb.title)
+                    put("afterSection", lb.afterSection)
+                    put("startTime", lb.startTime)
+                    put("endTime", lb.endTime)
+                },
+            )
+        }
 
         return root.toString(2)
     }
@@ -1143,11 +1165,23 @@ object TimetableImportExport {
                 }
             }
 
+            val lunchBreakObj = root.optJSONObject("lunchBreak")
+            val lunchBreakBackup = lunchBreakObj?.let { obj ->
+                LunchBreakBackupConfig(
+                    showLunchBreak = obj.optBoolean("showLunchBreak", false),
+                    title = obj.optString("title", "午休").trim().ifEmpty { "午休" },
+                    afterSection = obj.optInt("afterSection", 4).coerceIn(1, 15),
+                    startTime = obj.optString("startTime", "").trim(),
+                    endTime = obj.optString("endTime", "").trim(),
+                )
+            }
+
             FullBackupPayload(
                 timetables = timetables,
                 courses = courses,
                 sectionTimes = sectionTimes,
                 schedules = schedules,
+                lunchBreakBackup = lunchBreakBackup,
             )
         }.getOrNull()
     }

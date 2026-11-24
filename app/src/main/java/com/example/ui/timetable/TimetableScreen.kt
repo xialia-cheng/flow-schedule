@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -92,6 +93,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.CourseColorPalette
 import com.example.data.CourseEntity
@@ -363,7 +365,11 @@ fun TimetableScreen(
         }
         val lunchAfterSection = resolvedLunchBreak?.afterSection
         val lunchBreakHeight = if (resolvedLunchBreak != null) {
-            if (compactMode) 22.dp else 28.dp
+            when {
+                compactMode -> 24.dp
+                resolvedLunchBreak.axisRangeText.isNotEmpty() -> 38.dp
+                else -> 28.dp
+            }
         } else {
             0.dp
         }
@@ -457,15 +463,15 @@ fun TimetableScreen(
                                     ) {
                                         val colWidth = maxWidth / dayCount
                                         val gridLineColor = colorScheme.outlineVariant.copy(
-                                            alpha = if (flowColors.isDark) 0.22f else 0.30f,
+                                            alpha = if (flowColors.isDark) 0.34f else 0.32f,
                                         )
                                         val selectedColIndex = visibleIsoDays.indexOf(state.selectedDayOfWeek)
                                             .takeIf { it in 0 until dayCount }
                                         val selectedColHighlight = colorScheme.primary.copy(
-                                            alpha = if (flowColors.isDark) 0.13f else 0.085f,
+                                            alpha = if (flowColors.isDark) 0.14f else 0.085f,
                                         )
                                         val selectedColEdge = colorScheme.primary.copy(
-                                            alpha = if (flowColors.isDark) 0.36f else 0.28f,
+                                            alpha = if (flowColors.isDark) 0.42f else 0.28f,
                                         )
 
                                         // Selected day column soft backdrop + horizontal/vertical dashed gridlines
@@ -489,7 +495,9 @@ fun TimetableScreen(
                                                 val lunchY = (sectionHeight * lunchAfterSection).toPx()
                                                 val lunchH = lunchBreakHeight.toPx()
                                                 drawRect(
-                                                    color = colorScheme.surfaceContainerLow.copy(alpha = 0.72f),
+                                                    color = colorScheme.surfaceContainer.copy(
+                                                        alpha = if (flowColors.isDark) 0.58f else 0.78f,
+                                                    ),
                                                     topLeft = Offset(0f, lunchY),
                                                     size = Size(size.width, lunchH),
                                                 )
@@ -516,7 +524,7 @@ fun TimetableScreen(
                                             for (col in 1 until dayCount) {
                                                 val x = (colWidth * col).toPx()
                                                 drawLine(
-                                                    color = gridLineColor.copy(alpha = if (flowColors.isDark) 0.14f else 0.20f),
+                                                    color = gridLineColor.copy(alpha = if (flowColors.isDark) 0.22f else 0.20f),
                                                     start = Offset(x, 0f),
                                                     end = Offset(x, size.height),
                                                     strokeWidth = 0.5.dp.toPx(),
@@ -525,22 +533,6 @@ fun TimetableScreen(
                                         }
 
                                         // Empty slots are ONLY clickable in Edit Mode to prevent accidental popups while browsing/swiping
-                                        if (resolvedLunchBreak != null && lunchBreakHeight > 0.dp) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .offset(y = sectionHeight * resolvedLunchBreak.afterSection)
-                                                    .fillMaxWidth()
-                                                    .height(lunchBreakHeight),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                Text(
-                                                    text = resolvedLunchBreak.gridDisplayText,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontSize = 10.sp,
-                                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                                                )
-                                            }
-                                        }
 
                                         if (isEditMode) {
                                             Column(modifier = Modifier.fillMaxSize()) {
@@ -625,11 +617,77 @@ fun TimetableScreen(
                                             )
                                         }
 
+                                        // Draw lunch break pill AFTER course cards, centered inside the widest unobstructed column run
+                                        // (or elevated above cards with an opaque backdrop if every column spans across the break)
+                                        if (resolvedLunchBreak != null && lunchBreakHeight > 0.dp) {
+                                            val spannedColIndices = visibleCourses.mapNotNull { course ->
+                                                val clampedStart = course.startSection.coerceIn(1, sectionCount)
+                                                val clampedEnd = course.endSection.coerceIn(clampedStart, sectionCount)
+                                                val crosses = clampedStart <= resolvedLunchBreak.afterSection &&
+                                                    clampedEnd > resolvedLunchBreak.afterSection
+                                                if (crosses) {
+                                                    visibleIsoDays.indexOf(course.dayOfWeek).takeIf { it >= 0 }
+                                                } else {
+                                                    null
+                                                }
+                                            }.toSet()
+                                            val placement = computeLunchBreakPlacement(
+                                                dayCount = dayCount,
+                                                spannedColIndices = spannedColIndices,
+                                            )
+                                            val labelText = when {
+                                                placement.spanCols >= 3 -> resolvedLunchBreak.gridDisplayText
+                                                placement.spanCols == 2 -> resolvedLunchBreak.compactGridDisplayText
+                                                else -> resolvedLunchBreak.title
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .offset(
+                                                        x = colWidth * placement.startCol,
+                                                        y = sectionHeight * resolvedLunchBreak.afterSection,
+                                                    )
+                                                    .width(colWidth * placement.spanCols)
+                                                    .height(lunchBreakHeight)
+                                                    .zIndex(2f),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = colorScheme.surfaceContainerHigh.copy(
+                                                        alpha = if (placement.isOverlappingFallback) 0.96f else 0.92f,
+                                                    ),
+                                                    border = BorderStroke(
+                                                        width = 0.75.dp,
+                                                        color = colorScheme.outlineVariant.copy(
+                                                            alpha = if (flowColors.isDark) 0.8f else 0.65f,
+                                                        ),
+                                                    ),
+                                                    shadowElevation = if (placement.isOverlappingFallback) 2.dp else 0.5.dp,
+                                                    modifier = Modifier
+                                                        .padding(horizontal = 4.dp)
+                                                        .testTag("timetable_lunch_break_pill"),
+                                                ) {
+                                                    Text(
+                                                        text = labelText,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                                                    )
+                                                }
+                                            }
+                                        }
+
                                         // Gentle empty-timetable hint overlay positioned cleanly above the bottom-right FAB
                                         if (state.courses.isEmpty()) {
                                             Surface(
                                                 modifier = Modifier
                                                     .align(Alignment.TopCenter)
+                                                    .widthIn(max = 520.dp)
                                                     .padding(start = 20.dp, end = 24.dp, top = 84.dp, bottom = 88.dp),
                                                 shape = MaterialTheme.shapes.large,
                                                 color = flowColors.cardElevated.copy(alpha = 0.94f),
@@ -868,6 +926,7 @@ fun TimetableScreen(
             },
             onSetFluidCloudLockscreenDetails = { viewModel.setFluidCloudLockscreenDetails(it) },
             onSetThemeMode = { viewModel.setThemeMode(it) },
+            onSetUseDynamicColor = { viewModel.setUseDynamicColor(it) },
             onSetCompactMode = { viewModel.setCompactMode(it) },
             onOpenPermissions = onOpenPermissions,
             onOpenImportExport = { showImportSheet = true },
@@ -1672,6 +1731,7 @@ private fun SectionTimeAxisColumn(
                             }
                         }
                         Column(
+                            modifier = Modifier.padding(horizontal = 2.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
@@ -1682,15 +1742,29 @@ private fun SectionTimeAxisColumn(
                                 lineHeight = 11.sp,
                                 color = if (lunchElapsed > 0f && lunchElapsed < 1f) colorScheme.primary else colorScheme.onSurfaceVariant,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
-                            if (lunchRangeText.isNotEmpty() && !compactMode) {
+                            if (!compactMode &&
+                                resolvedLunchBreak.startLabel.isNotBlank() &&
+                                resolvedLunchBreak.endLabel.isNotBlank()
+                            ) {
                                 Text(
-                                    text = lunchRangeText,
+                                    text = resolvedLunchBreak.startLabel,
                                     fontFamily = MonoFontFamily,
-                                    fontSize = 8.sp,
-                                    lineHeight = 9.sp,
-                                    letterSpacing = (-0.3).sp,
-                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                                    fontSize = 8.5.sp,
+                                    lineHeight = 9.5.sp,
+                                    letterSpacing = (-0.2).sp,
+                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.88f),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                                Text(
+                                    text = resolvedLunchBreak.endLabel,
+                                    fontFamily = MonoFontFamily,
+                                    fontSize = 8.5.sp,
+                                    lineHeight = 9.5.sp,
+                                    letterSpacing = (-0.2).sp,
+                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.74f),
                                     maxLines = 1,
                                     softWrap = false,
                                 )
@@ -1956,7 +2030,7 @@ private fun CourseGridCard(
     val bgColor = if (isCurrentWeek) {
         if (flowColors.isDark) style.darkBg else style.lightBg
     } else {
-        colorScheme.surfaceContainerHigh.copy(alpha = 0.65f)
+        colorScheme.surfaceContainer.copy(alpha = if (flowColors.isDark) 0.88f else 0.72f)
     }
     val textColor = if (isCurrentWeek) {
         if (flowColors.isDark) style.darkText else style.lightText
@@ -1974,7 +2048,7 @@ private fun CourseGridCard(
 
     Surface(
         modifier = modifier
-            .alpha(if (isCurrentWeek) 1f else 0.56f)
+            .alpha(if (isCurrentWeek) 1f else if (flowColors.isDark) 0.72f else 0.62f)
             .clip(shape)
             .combinedClickable(
                 onClick = onClick,

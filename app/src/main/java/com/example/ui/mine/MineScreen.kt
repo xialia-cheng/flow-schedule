@@ -634,11 +634,11 @@ fun MineScreen(
                 }
             }
 
-            // 3. Appearance & Timetable Preferences
-            item(key = "preferences_section") {
+            // 3. Dedicated Appearance & Material 3 Theme Card (Dark Mode + Android 12+ Dynamic Color)
+            item(key = "appearance_theme_section") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "外观与课表偏好",
+                        text = "外观与主题",
                         style = MaterialTheme.typography.titleSmall,
                         color = colorScheme.onSurfaceVariant,
                     )
@@ -650,11 +650,35 @@ fun MineScreen(
                         border = BorderStroke(1.dp, colorScheme.outlineVariant),
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "外观主题",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = colorScheme.onSurface,
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "深色模式",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = colorScheme.onSurface,
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    listOf(
+                                        colorScheme.primary,
+                                        colorScheme.secondary,
+                                        colorScheme.tertiary,
+                                        colorScheme.surfaceContainerHighest,
+                                    ).forEach { swatch ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(12.dp)
+                                                .clip(CircleShape)
+                                                .background(swatch),
+                                        )
+                                    }
+                                }
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -677,6 +701,42 @@ fun MineScreen(
                                 color = colorScheme.outlineVariant,
                             )
 
+                            MineSwitchRow(
+                                title = "系统壁纸动态取色（Dynamic Color）",
+                                subtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    if (settings.useDynamicColor) {
+                                        "已开启 Material You · 界面随系统壁纸自动配色"
+                                    } else {
+                                        "已关闭 · 当前使用微澜深邃蓝紫微光默认配色"
+                                    }
+                                } else {
+                                    "需 Android 12 及以上系统，当前自动使用深邃蓝紫微光主题"
+                                },
+                                checked = settings.useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+                                onCheckedChange = { timetableViewModel.setUseDynamicColor(it) },
+                                testTag = "mine_switch_dynamic_color",
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3.1 Timetable & Interaction Preferences
+            item(key = "preferences_section") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "课表与交互偏好",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        color = flowColors.cardElevated,
+                        border = BorderStroke(1.dp, colorScheme.outlineVariant),
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Text(
                                 text = "每周起始日（课表与日程日期条同步生效）",
                                 style = MaterialTheme.typography.titleSmall,
@@ -702,18 +762,6 @@ fun MineScreen(
                             HorizontalDivider(
                                 modifier = Modifier.padding(vertical = 12.dp),
                                 color = colorScheme.outlineVariant,
-                            )
-
-                            MineSwitchRow(
-                                title = "系统壁纸动态取色（Dynamic Color）",
-                                subtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                    "开启后跟随系统壁纸色系；关闭则使用深邃蓝紫微光默认主题"
-                                } else {
-                                    "需 Android 12 及以上系统，当前自动使用深邃蓝紫微光主题"
-                                },
-                                checked = settings.useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
-                                onCheckedChange = { timetableViewModel.setUseDynamicColor(it) },
-                                testTag = "mine_switch_dynamic_color",
                             )
 
                             MineSwitchRow(
@@ -1224,8 +1272,9 @@ fun MineScreen(
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val lunchSuffix = if (payload.lunchBreakBackup != null) "及午休分隔带配置" else ""
                     Text(
-                        text = "已解析到 ${payload.timetables.size} 张课表、${payload.courses.size} 门课程、${payload.schedules.size} 条日程（含已完成记录）。",
+                        text = "已解析到 ${payload.timetables.size} 张课表、${payload.courses.size} 门课程、${payload.schedules.size} 条日程（含已完成记录）$lunchSuffix。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = colorScheme.onSurface,
                     )

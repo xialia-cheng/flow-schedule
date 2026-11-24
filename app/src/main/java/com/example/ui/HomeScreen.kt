@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -177,30 +178,36 @@ fun HomeScreen(
                     .statusBarsPadding(),
                 color = colorScheme.background.copy(alpha = 0.96f),
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    TopHeaderRow(
-                        selectedDateMillis = state.selectedDateMillis,
-                        nowMillis = state.nowMillis,
-                        permissionsReady = state.permissionStatus.allRecommendedGranted,
-                        onJumpToday = { viewModel.jumpToToday() },
-                        onOpenPermissions = { viewModel.openPermissionSheet() },
-                        onAddSchedule = { viewModel.openNewScheduleEditor() },
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 1120.dp)
+                            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        TopHeaderRow(
+                            selectedDateMillis = state.selectedDateMillis,
+                            nowMillis = state.nowMillis,
+                            permissionsReady = state.permissionStatus.allRecommendedGranted,
+                            onJumpToday = { viewModel.jumpToToday() },
+                            onOpenPermissions = { viewModel.openPermissionSheet() },
+                            onAddSchedule = { viewModel.openNewScheduleEditor() },
+                        )
 
-                    ScheduleWeekdayDateStrip(
-                        weekDatesMillis = state.weekDatesMillis,
-                        weekStartDay = state.weekStartDay,
-                        selectedDateMillis = state.selectedDateMillis,
-                        nowMillis = state.nowMillis,
-                        scheduledDateKeys = state.scheduledDateKeys,
-                        onSelectDate = { viewModel.selectDate(it) },
-                        onShiftWeek = { delta -> viewModel.shiftSelectedDate(delta * 7) },
-                    )
+                        ScheduleWeekdayDateStrip(
+                            weekDatesMillis = state.weekDatesMillis,
+                            weekStartDay = state.weekStartDay,
+                            selectedDateMillis = state.selectedDateMillis,
+                            nowMillis = state.nowMillis,
+                            scheduledDateKeys = state.scheduledDateKeys,
+                            onSelectDate = { viewModel.selectDate(it) },
+                            onShiftWeek = { delta -> viewModel.shiftSelectedDate(delta * 7) },
+                        )
+                    }
                 }
             }
 
@@ -217,55 +224,62 @@ fun HomeScreen(
                     .nestedScroll(fabScrollState.nestedScrollConnection),
             ) {
                 val isExpanded = maxWidth >= 700.dp
+                val singlePaneExtraPadding = ((maxWidth - 640.dp) / 2).coerceAtLeast(0.dp)
 
                 if (isExpanded) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 24.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.TopCenter,
                     ) {
-                        LazyColumn(
+                        Row(
                             modifier = Modifier
-                                .weight(0.45f)
-                                .fillMaxHeight(),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            contentPadding = PaddingValues(bottom = 84.dp),
+                                .fillMaxSize()
+                                .widthIn(max = 1120.dp)
+                                .padding(horizontal = 24.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(24.dp),
                         ) {
-                            item {
-                                TodaySummaryCard(
-                                    pendingCount = state.todayPendingCount,
-                                    completedCount = state.todayCompletedCount,
-                                    totalCount = state.todayTotalCount,
-                                )
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(0.45f)
+                                    .fillMaxHeight(),
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                                contentPadding = PaddingValues(bottom = 84.dp),
+                            ) {
+                                item {
+                                    TodaySummaryCard(
+                                        pendingCount = state.todayPendingCount,
+                                        completedCount = state.todayCompletedCount,
+                                        totalCount = state.todayTotalCount,
+                                    )
+                                }
+                                item {
+                                    HeroLiveCard(
+                                        schedule = state.heroSchedule,
+                                        nowMillis = state.nowMillis,
+                                        isLiveActive = state.isHeroLiveActive,
+                                        customTags = state.customTags,
+                                        onComplete = { viewModel.toggleComplete(it) },
+                                        onSnooze10Min = { viewModel.snoozeSchedule10Minutes(it) },
+                                        onEdit = { viewModel.openEditScheduleEditor(it) },
+                                    )
+                                }
                             }
-                            item {
-                                HeroLiveCard(
-                                    schedule = state.heroSchedule,
-                                    nowMillis = state.nowMillis,
-                                    isLiveActive = state.isHeroLiveActive,
-                                    customTags = state.customTags,
-                                    onComplete = { viewModel.toggleComplete(it) },
-                                    onSnooze10Min = { viewModel.snoozeSchedule10Minutes(it) },
-                                    onEdit = { viewModel.openEditScheduleEditor(it) },
-                                )
-                            }
-                        }
 
-                        ScheduleTimelinePane(
-                            state = state,
-                            onSelectFilter = { viewModel.selectFilter(it) },
-                            onSelectTagFilter = { viewModel.selectTagFilter(it) },
-                            onResetTagFilter = { viewModel.resetTagFilter() },
-                            onManageTags = { showCustomTagManager = true },
-                            onToggleComplete = { viewModel.toggleComplete(it) },
-                            onDelete = { viewModel.deleteSchedule(it) },
-                            onEdit = { viewModel.openEditScheduleEditor(it) },
-                            onLongClick = { viewModel.openQuickActionMenu(it) },
-                            modifier = Modifier
-                                .weight(0.55f)
-                                .fillMaxHeight(),
-                        )
+                            ScheduleTimelinePane(
+                                state = state,
+                                onSelectFilter = { viewModel.selectFilter(it) },
+                                onSelectTagFilter = { viewModel.selectTagFilter(it) },
+                                onResetTagFilter = { viewModel.resetTagFilter() },
+                                onManageTags = { showCustomTagManager = true },
+                                onToggleComplete = { viewModel.toggleComplete(it) },
+                                onDelete = { viewModel.deleteSchedule(it) },
+                                onEdit = { viewModel.openEditScheduleEditor(it) },
+                                onLongClick = { viewModel.openQuickActionMenu(it) },
+                                modifier = Modifier
+                                    .weight(0.55f)
+                                    .fillMaxHeight(),
+                            )
+                        }
                     }
                 } else {
                     LazyColumn(
@@ -274,8 +288,8 @@ fun HomeScreen(
                             .fillMaxSize()
                             .testTag("home_schedule_list"),
                         contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
+                            start = 16.dp + singlePaneExtraPadding,
+                            end = 16.dp + singlePaneExtraPadding,
                             top = 12.dp,
                             bottom = 84.dp,
                         ),

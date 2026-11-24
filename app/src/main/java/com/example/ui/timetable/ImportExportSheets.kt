@@ -515,8 +515,9 @@ fun TimetableImportSheet(
             title = { Text("选择备份恢复方式") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val lunchSuffix = if (payload.lunchBreakBackup != null) "及午休分隔带配置" else ""
                     Text(
-                        text = "已解析到 ${payload.timetables.size} 个课表、${payload.courses.size} 门课程、${payload.schedules.size} 条日程。",
+                        text = "已解析到 ${payload.timetables.size} 个课表、${payload.courses.size} 门课程、${payload.schedules.size} 条日程$lunchSuffix。",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(

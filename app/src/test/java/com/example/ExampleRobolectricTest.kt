@@ -17,6 +17,7 @@ import com.example.smart.DraftType
 import com.example.smart.LocalKeystoreCipher
 import com.example.smart.OpenAiCompatibleClient
 import com.example.smart.SecureStorageException
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -1640,6 +1641,115 @@ class ExampleRobolectricTest {
         assertEquals(courseTrigger, scheduler.getActiveReReminderMillis(isCourse = true, itemId = 55L, nowMillis = now))
         scheduler.cancelCustomReReminder(isCourse = true, itemId = 55L)
         assertNull(scheduler.getActiveReReminderMillis(isCourse = true, itemId = 55L, nowMillis = now))
+    }
+
+    @Test
+    fun `lunch break placement avoids spanning course columns and falls back when all columns span`() {
+        val wideOpen = com.example.ui.timetable.computeLunchBreakPlacement(
+            dayCount = 7,
+            spannedColIndices = emptySet(),
+        )
+        assertEquals(0, wideOpen.startCol)
+        assertEquals(7, wideOpen.spanCols)
+        assertFalse(wideOpen.isOverlappingFallback)
+
+        // Columns 2 & 3 blocked -> widest unobstructed run is cols 4..6 (length 3 > cols 0..1 length 2)
+        val partialBlocked = com.example.ui.timetable.computeLunchBreakPlacement(
+            dayCount = 7,
+            spannedColIndices = setOf(2, 3),
+        )
+        assertEquals(4, partialBlocked.startCol)
+        assertEquals(3, partialBlocked.spanCols)
+        assertFalse(partialBlocked.isOverlappingFallback)
+
+        // All visible columns blocked -> fallback spans full grid with elevated opaque surface flag
+        val fullyBlocked = com.example.ui.timetable.computeLunchBreakPlacement(
+            dayCount = 5,
+            spannedColIndices = setOf(0, 1, 2, 3, 4),
+        )
+        assertEquals(0, fullyBlocked.startCol)
+        assertEquals(5, fullyBlocked.spanCols)
+        assertTrue(fullyBlocked.isOverlappingFallback)
+
+        // Single-sided custom start time pairs cleanly with adjacent section start time
+        val defaultSections = CourseColorPalette.defaultSectionTimes(1L)
+        val singleSided = com.example.ui.timetable.resolveLunchBreak(
+            settings = com.example.data.AppSettings(
+                showLunchBreak = true,
+                lunchBreakTitle = "午休",
+                lunchAfterSection = 4,
+                lunchBreakStartTime = "12:10",
+                lunchBreakEndTime = "",
+            ),
+            sectionTimes = defaultSections,
+            sectionCount = defaultSections.size,
+        )
+        assertNotNull(singleSided)
+        assertEquals("12:10", singleSided!!.startLabel)
+        assertEquals("14:00", singleSided.endLabel)
+        assertEquals("午休 · 12:10-14:00", singleSided.compactGridDisplayText)
+    }
+
+    @Test
+    fun `full backup json persists lunch break customization and preserves legacy v3 compatibility`() {
+        val tt = TimetableEntity(
+            id = 1L,
+            name = "2026秋季",
+            semesterStartMondayMillis = 1_790_000_000_000L,
+            totalWeeks = 20,
+            isActive = true,
+        )
+        val lunchBackup = com.example.data.LunchBreakBackupConfig(
+            showLunchBreak = true,
+            title = "午间休整",
+            afterSection = 5,
+            startTime = "12:15",
+            endTime = "13:50",
+        )
+        val json = TimetableImportExport.exportFullBackupJson(
+            com.example.data.FullBackupPayload(
+                timetables = listOf(tt),
+                courses = emptyList(),
+                sectionTimes = CourseColorPalette.defaultSectionTimes(1L),
+                schedules = emptyList(),
+                lunchBreakBackup = lunchBackup,
+            ),
+        )
+        val parsed = TimetableImportExport.parseFullBackupJson(json)
+        assertNotNull(parsed)
+        assertEquals(lunchBackup, parsed!!.lunchBreakBackup)
+
+        // Legacy backup without lunchBreak block still parses cleanly with null lunchBreakBackup
+        val legacyJson = """{"schemaVersion":3,"timetables":[{"id":1,"name":"旧课表","totalWeeks":16,"isActive":true}],"courses":[],"sectionTimes":[],"schedules":[]}"""
+        val parsedLegacy = TimetableImportExport.parseFullBackupJson(legacyJson)
+        assertNotNull(parsedLegacy)
+        assertNull(parsedLegacy!!.lunchBreakBackup)
+        assertEquals("旧课表", parsedLegacy.timetables.first().name)
+    }
+
+    @Test
+    fun `user preferences repository persists theme mode dynamic color and lunch break customization`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = com.example.data.UserPreferencesRepository(context)
+        kotlinx.coroutines.runBlocking {
+            repo.setThemeMode(com.example.data.AppThemeMode.DARK)
+            repo.setUseDynamicColor(false)
+            repo.setShowLunchBreak(true)
+            repo.setLunchBreakConfig(
+                title = "大课间",
+                afterSection = 5,
+                startTime = "12:20",
+                endTime = "14:05",
+            )
+            val saved = repo.settings.first()
+            assertEquals(com.example.data.AppThemeMode.DARK, saved.themeMode)
+            assertFalse(saved.useDynamicColor)
+            assertTrue(saved.showLunchBreak)
+            assertEquals("大课间", saved.lunchBreakTitle)
+            assertEquals(5, saved.lunchAfterSection)
+            assertEquals("12:20", saved.lunchBreakStartTime)
+            assertEquals("14:05", saved.lunchBreakEndTime)
+        }
     }
 }
 

@@ -198,7 +198,7 @@ fun AppRootScreen(
                 )
             },
     ) {
-        val useNavigationRail = maxWidth >= 700.dp
+        val useNavigationRail = maxWidth >= 600.dp
 
         if (useNavigationRail) {
             Scaffold(
@@ -215,6 +215,7 @@ fun AppRootScreen(
                 ) {
                     NavigationRail(
                         containerColor = colorScheme.surfaceContainerLow,
+                        windowInsets = WindowInsets(0, 0, 0, 0),
                         modifier = Modifier.fillMaxHeight(),
                     ) {
                         AppDestination.entries.forEach { destination ->
