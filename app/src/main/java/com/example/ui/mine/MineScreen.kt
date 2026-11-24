@@ -81,6 +81,7 @@ fun MineScreen(
     onOpenPermissions: () -> Unit,
     onOpenDndPolicySettings: () -> Unit = {},
     onTriggerFluidCloudTest: () -> Unit,
+    onStopFluidCloudTest: () -> Unit = {},
     onShowMessage: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -404,6 +405,7 @@ fun MineScreen(
                         hasActiveTestSchedule = scheduleState.hasActiveTestSchedule,
                         updateState = updateState,
                         onTriggerFluidCloudTest = onTriggerFluidCloudTest,
+                        onStopFluidCloudTest = onStopFluidCloudTest,
                         onCheckUpdatesClick = {
                             if (updateState.availableRelease != null && !updateState.isChecking) {
                                 appUpdateViewModel.openUpdateDialog()

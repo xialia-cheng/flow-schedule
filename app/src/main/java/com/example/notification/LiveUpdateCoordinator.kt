@@ -41,6 +41,7 @@ class LiveUpdateCoordinator(
             if (item.isExpired(nowMillis)) {
                 if (item.isTestSchedule) {
                     alarmScheduler.cancelAlarmsForSchedule(item.id)
+                    alarmScheduler.cancelAlarmsForTestSchedule(item.id)
                     scheduleDao.updateSchedule(
                         item.copy(
                             isCompleted = true,
@@ -193,7 +194,12 @@ class LiveUpdateCoordinator(
         fallbackLocation: String = "教A-301",
     ): Long {
         val now = System.currentTimeMillis()
-        scheduleDao.deleteCompletedTestSchedules()
+        scheduleDao.getActiveTestSchedules().forEach { existingTest ->
+            alarmScheduler.cancelAlarmsForSchedule(existingTest.id)
+            alarmScheduler.cancelAlarmsForTestSchedule(existingTest.id)
+            alarmScheduler.cancelCustomReReminder(isCourse = false, itemId = existingTest.id)
+        }
+        scheduleDao.deleteAllTestSchedules()
 
         val activeTimetable = timetableDao.getActiveTimetable()
         val sampleCourse = activeTimetable?.let { tt ->
@@ -225,6 +231,26 @@ class LiveUpdateCoordinator(
             rescheduleAlarms = true,
         )
         return newId
+    }
+
+    /**
+     * Immediately stops all active Live Update test schedules: cancels their alarms, removes
+     * test records, dismisses the test Live Update notification, and restores any real active item.
+     */
+    suspend fun stopCourseLivePreview(nowMillis: Long = System.currentTimeMillis()) {
+        val activeTests = scheduleDao.getActiveTestSchedules()
+        activeTests.forEach { item ->
+            alarmScheduler.cancelAlarmsForSchedule(item.id)
+            alarmScheduler.cancelAlarmsForTestSchedule(item.id)
+            alarmScheduler.cancelCustomReReminder(isCourse = false, itemId = item.id)
+        }
+        scheduleDao.deleteAllTestSchedules()
+        liveUpdateManager.cancelLiveUpdate()
+        syncAll(
+            nowMillis = nowMillis,
+            forceAlert = false,
+            rescheduleAlarms = true,
+        )
     }
 
     suspend fun handleCompleteAction(
@@ -332,6 +358,9 @@ class LiveUpdateCoordinator(
         if (schedule.isCompleted) return
 
         alarmScheduler.cancelAlarmsForSchedule(schedule.id)
+        if (schedule.isTestSchedule) {
+            alarmScheduler.cancelAlarmsForTestSchedule(schedule.id)
+        }
         scheduleDao.updateSchedule(
             schedule.copy(
                 isCompleted = true,

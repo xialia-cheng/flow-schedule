@@ -693,6 +693,13 @@ class ScheduleViewModel(
         }
     }
 
+    fun stopFluidCloudTest() {
+        viewModelScope.launch {
+            repository.stopTestFluidCloudSchedules()
+            emitSnackbar("已停止实况通知测试并恢复当前课程/日程状态")
+        }
+    }
+
     fun consumeSnackbar() {
         _snackbarEvent.value = null
     }

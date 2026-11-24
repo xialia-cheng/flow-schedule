@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToKey
 import androidx.test.core.app.ApplicationProvider
 import com.example.ui.ScheduleViewModel
@@ -103,5 +104,76 @@ class MineScreenRobolectricTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("mine_test_fluid_cloud_button").assertExists()
         composeTestRule.onNodeWithTag("mine_about_help_entry").assertExists()
+        composeTestRule.onNodeWithTag("mine_stop_fluid_cloud_button").assertDoesNotExist()
+    }
+
+    @Test
+    fun `fluid cloud test card shows stop test button when active test exists and triggers stop callback`() {
+        val app = ApplicationProvider.getApplicationContext<ScheduleApp>()
+        val container = app.container
+        kotlinx.coroutines.runBlocking {
+            container.scheduleRepository.createTestFluidCloudSchedule("高等数学", "@教A-301")
+        }
+
+        val scheduleVm = ScheduleViewModel(
+            repository = container.scheduleRepository,
+            preferencesRepository = container.preferencesRepository,
+            liveUpdateManager = container.liveUpdateManager,
+        )
+        val timetableVm = TimetableViewModel(
+            timetableRepository = container.timetableRepository,
+            preferencesRepository = container.preferencesRepository,
+            liveUpdateCoordinator = container.liveUpdateCoordinator,
+        )
+        val smartVm = SmartCaptureViewModel(
+            orchestrator = container.smartCaptureOrchestrator,
+            preferencesRepository = container.preferencesRepository,
+        )
+        val updateVm = AppUpdateViewModel(
+            preferencesRepository = container.preferencesRepository,
+        )
+
+        var stopCalled = false
+        composeTestRule.setContent {
+            FlowScheduleTheme {
+                MineScreen(
+                    timetableViewModel = timetableVm,
+                    scheduleViewModel = scheduleVm,
+                    smartCaptureViewModel = smartVm,
+                    appUpdateViewModel = updateVm,
+                    onOpenPermissions = {},
+                    onOpenDndPolicySettings = {},
+                    onTriggerFluidCloudTest = {},
+                    onStopFluidCloudTest = { stopCalled = true },
+                    onShowMessage = {},
+                )
+            }
+        }
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000L) {
+            scheduleVm.uiState.value.hasActiveTestSchedule
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("mine_lazy_list")
+            .performScrollToKey("group_advanced_about")
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("mine_group_advanced_header").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("mine_lazy_list")
+            .performScrollToKey("mine_bottom_spacer")
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("mine_stop_fluid_cloud_button")
+            .assertExists()
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeTestRule.onNodeWithText("停止测试").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        org.junit.Assert.assertTrue(stopCalled)
+
+        kotlinx.coroutines.runBlocking {
+            container.scheduleRepository.stopTestFluidCloudSchedules()
+        }
     }
 }

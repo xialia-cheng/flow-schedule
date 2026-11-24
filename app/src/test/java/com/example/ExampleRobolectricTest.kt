@@ -1890,7 +1890,122 @@ class ExampleRobolectricTest {
             db.close()
         }
     }
+
+    @Test
+    fun `live update manager alerts on prep to active transition and coordinator stops test preview restoring real schedule`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.ScheduleDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val prefs = com.example.data.UserPreferencesRepository(context)
+            val scheduler = com.example.notification.ScheduleAlarmScheduler(context)
+            val manager = com.example.notification.LiveUpdateManager(context)
+            manager.ensureNotificationChannel()
+
+            val coordinator = com.example.notification.LiveUpdateCoordinator(
+                scheduleDao = db.scheduleDao(),
+                timetableDao = db.timetableDao(),
+                preferencesRepository = prefs,
+                alarmScheduler = scheduler,
+                liveUpdateManager = manager,
+            )
+
+            // 1. Verify isolated alarmRequestKey for test items vs courses/schedules
+            val now = System.currentTimeMillis()
+            val courseKey = LiveActivityItem(
+                sourceType = LiveActivitySourceType.COURSE,
+                sourceId = 1L,
+                dateKey = "2026-11-24",
+                title = "高等数学",
+                startTimeMillis = now + 60_000L,
+                endTimeMillis = now + 120_000L,
+                reminderMinutesBefore = 1,
+                isTest = false,
+            ).alarmRequestKey()
+            val testCourseKey = LiveActivityItem(
+                sourceType = LiveActivitySourceType.COURSE,
+                sourceId = 1L,
+                dateKey = "2026-11-24",
+                title = "高等数学",
+                startTimeMillis = now + 60_000L,
+                endTimeMillis = now + 120_000L,
+                reminderMinutesBefore = 1,
+                isTest = true,
+            ).alarmRequestKey()
+            assertTrue(testCourseKey >= 800_000)
+            assertFalse(courseKey == testCourseKey)
+
+            // 2. Verify prep -> active phase transition clears FLAG_ONLY_ALERT_ONCE even when forceAlert = false
+            val appContext = ApplicationProvider.getApplicationContext<android.app.Application>()
+            org.robolectric.Shadows.shadowOf(appContext).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+            val prepStart = now + 30_000L
+            val prepEnd = now + 90_000L
+            val phaseItem = LiveActivityItem(
+                sourceType = LiveActivitySourceType.COURSE,
+                sourceId = 77L,
+                dateKey = "2026-11-24",
+                title = "编译原理",
+                startTimeMillis = prepStart,
+                endTimeMillis = prepEnd,
+                reminderMinutesBefore = 1,
+            )
+            manager.syncLiveActivity(listOf(phaseItem), nowMillis = now + 5_000L, forceAlert = true)
+            manager.syncLiveActivity(listOf(phaseItem), nowMillis = prepStart + 500L, forceAlert = false)
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            val postedAfterStart = org.robolectric.Shadows.shadowOf(nm)
+                .getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+            assertNotNull(postedAfterStart)
+            assertEquals(prepEnd, postedAfterStart.`when`)
+            assertEquals(0, postedAfterStart.flags and android.app.Notification.FLAG_ONLY_ALERT_ONCE)
+
+            // 3. Insert a real ongoing schedule, trigger test preview, then stop preview and verify real schedule restores
+            kotlinx.coroutines.runBlocking {
+                db.scheduleDao().insertSchedule(
+                    ScheduleEntity(
+                        title = "真实日程进行中",
+                        startTimeMillis = now - 5 * 60_000L,
+                        endTimeMillis = now + 25 * 60_000L,
+                        reminderMinutesBefore = 10,
+                    ),
+                )
+                coordinator.triggerCourseLivePreview("测试课程", "教A-301")
+                assertEquals(1, db.scheduleDao().getActiveTestSchedules().size)
+                assertTrue(manager.activeLiveActivity.value?.isTest == true)
+
+                coordinator.stopCourseLivePreview(nowMillis = System.currentTimeMillis())
+                assertTrue(db.scheduleDao().getActiveTestSchedules().isEmpty())
+                assertEquals("真实日程进行中", manager.activeLiveActivity.value?.title)
+                assertFalse(manager.activeLiveActivity.value?.isTest == true)
+            }
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `schedule guard service schedules 1500ms resurrection alarm on task removal`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        val shadowAlarmManager = org.robolectric.Shadows.shadowOf(alarmManager)
+
+        val before = System.currentTimeMillis()
+        com.example.notification.ScheduleGuardService.scheduleResurrectionRecovery(context)
+        val after = System.currentTimeMillis()
+
+        val scheduled = shadowAlarmManager.scheduledAlarms
+        assertTrue(scheduled.isNotEmpty())
+        val resurrectAlarm = scheduled.firstOrNull { alarm ->
+            val pendingIntent = alarm.operation ?: return@firstOrNull false
+            org.robolectric.Shadows.shadowOf(pendingIntent).savedIntent.action ==
+                com.example.notification.ScheduleAlarmReceiver.ACTION_RESURRECT_GUARD
+        }
+        assertNotNull(resurrectAlarm)
+        assertTrue(resurrectAlarm!!.triggerAtMs in (before + 1_400L)..(after + 2_000L))
+    }
 }
+
 
 
 

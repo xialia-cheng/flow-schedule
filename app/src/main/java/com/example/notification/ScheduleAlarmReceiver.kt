@@ -3,6 +3,7 @@ package com.example.notification
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import com.example.ScheduleApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,8 +14,10 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
-        if (action == ACTION_GUARD_RESTART) {
+
+        if (action == ACTION_RESURRECT_GUARD || action == ACTION_GUARD_RESTART) {
             val pendingResult = goAsync()
+            val wakeLock = acquireReceiverWakeLock(context)
             val app = context.applicationContext as ScheduleApp
             CoroutineScope(Dispatchers.IO).launch {
                 try {
@@ -22,16 +25,17 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
                         app.container.preferencesRepository.settings.first().backgroundGuardEnabled
                     }.getOrDefault(false)
                     if (guardEnabled) {
+                        runCatching {
+                            ScheduleGuardService.tryStart(context)
+                        }
                         app.container.liveUpdateCoordinator.syncAll(
                             nowMillis = System.currentTimeMillis(),
                             forceAlert = false,
                             rescheduleAlarms = true,
                         )
-                        if (!ScheduleGuardService.isRunning) {
-                            ScheduleGuardService.tryStart(context)
-                        }
                     }
                 } finally {
+                    releaseWakeLockSafely(wakeLock)
                     pendingResult.finish()
                 }
             }
@@ -45,6 +49,7 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
             val title = intent.getStringExtra(ScheduleAlarmScheduler.EXTRA_RE_REMINDER_TITLE).orEmpty()
             val subtitle = intent.getStringExtra(ScheduleAlarmScheduler.EXTRA_RE_REMINDER_SUBTITLE).orEmpty()
             val pendingResult = goAsync()
+            val wakeLock = acquireReceiverWakeLock(context)
             val app = context.applicationContext as ScheduleApp
             app.container.alarmScheduler.clearReReminderEntry(key)
             app.container.liveUpdateManager.postCustomReReminderNotification(
@@ -61,6 +66,7 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
                         rescheduleAlarms = false,
                     )
                 } finally {
+                    releaseWakeLockSafely(wakeLock)
                     pendingResult.finish()
                 }
             }
@@ -79,7 +85,9 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
         )
         val shouldAlert = phase == ScheduleAlarmScheduler.PHASE_REMINDER ||
             phase == ScheduleAlarmScheduler.PHASE_START
-        val shouldReschedule = phase == ScheduleAlarmScheduler.PHASE_END ||
+        val shouldReschedule = phase == ScheduleAlarmScheduler.PHASE_REMINDER ||
+            phase == ScheduleAlarmScheduler.PHASE_START ||
+            phase == ScheduleAlarmScheduler.PHASE_END ||
             phase == ScheduleAlarmScheduler.PHASE_DAILY_ROLLOVER
 
         // Guard against AlarmManager early-delivery jitter (e.g., firing 100ms before target endTime)
@@ -97,6 +105,7 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
         }
 
         val pendingResult = goAsync()
+        val wakeLock = acquireReceiverWakeLock(context)
         val app = context.applicationContext as ScheduleApp
         val liveUpdateManager = app.container.liveUpdateManager
 
@@ -114,7 +123,9 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
                     app.container.preferencesRepository.settings.first().backgroundGuardEnabled
                 }.getOrDefault(false)
                 if (guardEnabled && !ScheduleGuardService.isRunning) {
-                    ScheduleGuardService.tryStart(context)
+                    runCatching {
+                        ScheduleGuardService.tryStart(context)
+                    }
                 }
                 app.container.liveUpdateCoordinator.syncAll(
                     nowMillis = effectiveNow,
@@ -122,14 +133,39 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
                     rescheduleAlarms = shouldReschedule,
                 )
             } finally {
+                releaseWakeLockSafely(wakeLock)
                 pendingResult.finish()
+            }
+        }
+    }
+
+    private fun acquireReceiverWakeLock(context: Context): PowerManager.WakeLock? {
+        return runCatching {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)?.apply {
+                setReferenceCounted(false)
+                acquire(WAKE_LOCK_TIMEOUT_MS)
+            }
+        }.getOrNull()
+    }
+
+    private fun releaseWakeLockSafely(wakeLock: PowerManager.WakeLock?) {
+        if (wakeLock != null) {
+            runCatching {
+                if (wakeLock.isHeld) {
+                    wakeLock.release()
+                }
             }
         }
     }
 
     companion object {
         const val ACTION_SCHEDULE_TRIGGER = "com.example.action.SCHEDULE_ALARM_TRIGGER"
+        const val ACTION_RESURRECT_GUARD = "com.example.action.RESURRECT_GUARD"
         const val ACTION_GUARD_RESTART = "com.example.action.GUARD_RESTART"
         const val ACTION_CUSTOM_RE_REMINDER = "com.example.action.CUSTOM_RE_REMINDER"
+
+        private const val WAKE_LOCK_TAG = "rippleplan:alarm_receiver"
+        private const val WAKE_LOCK_TIMEOUT_MS = 8_000L
     }
 }

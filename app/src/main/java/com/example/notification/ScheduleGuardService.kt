@@ -1,7 +1,6 @@
 package com.example.notification
 
 import android.annotation.SuppressLint
-import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -29,15 +28,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Lightweight all-day foreground guard service (`specialUse`) that listens to time ticks and
- * date rollovers, keeps upcoming alarms armed across midnight or task-swipe removal, and posts
- * a low-priority silent ongoing notification isolated from [LiveUpdateManager].
+ * Lightweight all-day foreground guard service (`specialUse`) that listens to time ticks,
+ * date rollovers, and phase boundaries, keeps upcoming alarms armed across midnight or task-swipe
+ * removal, and posts a low-priority silent ongoing notification isolated from [LiveUpdateManager].
  */
 class ScheduleGuardService : Service() {
 
@@ -56,16 +56,23 @@ class ScheduleGuardService : Service() {
     @Volatile
     private var lastPostedStatusText: String = ""
 
+    @Volatile
+    private var lastScheduledBoundaryMillis: Long = 0L
+
     private var activeSyncJob: Job? = null
+    private var phaseBoundaryJob: Job? = null
 
     private val timeEventReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val action = intent.action ?: return
-            val forceReschedule = action == Intent.ACTION_DATE_CHANGED ||
+            val now = System.currentTimeMillis()
+            val crossedBoundary = lastScheduledBoundaryMillis > 0L && now >= lastScheduledBoundaryMillis
+            val forceReschedule = crossedBoundary ||
+                action == Intent.ACTION_DATE_CHANGED ||
                 action == Intent.ACTION_TIME_CHANGED ||
                 action == Intent.ACTION_TIMEZONE_CHANGED ||
                 action == Intent.ACTION_USER_PRESENT
-            triggerSync(rescheduleAlarms = forceReschedule)
+            triggerSync(rescheduleAlarms = forceReschedule, forceAlert = crossedBoundary)
         }
     }
 
@@ -85,6 +92,7 @@ class ScheduleGuardService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP_GUARD) {
             lastKnownGuardEnabled = false
+            phaseBoundaryJob?.cancel()
             stopForegroundAndSelf()
             return START_NOT_STICKY
         }
@@ -95,19 +103,20 @@ class ScheduleGuardService : Service() {
             return START_NOT_STICKY
         }
 
-        triggerSync(rescheduleAlarms = true)
+        triggerSync(rescheduleAlarms = true, forceAlert = false)
         return START_STICKY
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         if (lastKnownGuardEnabled) {
-            scheduleDelayedRestartRecovery(applicationContext)
+            scheduleResurrectionRecovery(applicationContext)
         }
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
         isRunning = false
+        phaseBoundaryJob?.cancel()
         runCatching { unregisterReceiver(timeEventReceiver) }
         serviceScope.cancel()
         super.onDestroy()
@@ -151,14 +160,15 @@ class ScheduleGuardService : Service() {
         }.getOrDefault(false)
     }
 
-    private fun triggerSync(rescheduleAlarms: Boolean) {
-        if (activeSyncJob?.isActive == true && !rescheduleAlarms) return
+    private fun triggerSync(rescheduleAlarms: Boolean, forceAlert: Boolean = false) {
+        if (activeSyncJob?.isActive == true && !rescheduleAlarms && !forceAlert) return
         activeSyncJob = serviceScope.launch {
             syncMutex.withLock {
                 val app = applicationContext as? ScheduleApp ?: return@withLock
                 val settings = app.container.preferencesRepository.settings.first()
                 lastKnownGuardEnabled = settings.backgroundGuardEnabled
                 if (!settings.backgroundGuardEnabled) {
+                    phaseBoundaryJob?.cancel()
                     stopForegroundAndSelf()
                     return@withLock
                 }
@@ -172,7 +182,7 @@ class ScheduleGuardService : Service() {
                 runCatching {
                     app.container.liveUpdateCoordinator.syncAll(
                         nowMillis = now,
-                        forceAlert = false,
+                        forceAlert = forceAlert,
                         rescheduleAlarms = shouldReschedule,
                     )
                 }
@@ -182,12 +192,28 @@ class ScheduleGuardService : Service() {
                     lastRescheduleMillis = now
                 }
 
-                val statusText = resolveGuardStatusText(applicationContext, now)
-                if (statusText != lastPostedStatusText) {
-                    lastPostedStatusText = statusText
-                    updateGuardNotification(statusText)
+                val snapshot = resolveGuardSnapshot(applicationContext, now)
+                if (snapshot.statusText != lastPostedStatusText) {
+                    lastPostedStatusText = snapshot.statusText
+                    updateGuardNotification(snapshot.statusText)
                 }
+                schedulePhaseBoundaryPatrol(snapshot.nextBoundaryMillis)
             }
+        }
+    }
+
+    private fun schedulePhaseBoundaryPatrol(nextBoundaryMillis: Long?) {
+        phaseBoundaryJob?.cancel()
+        lastScheduledBoundaryMillis = nextBoundaryMillis ?: 0L
+        if (nextBoundaryMillis == null) return
+
+        val waitMillis = (nextBoundaryMillis - System.currentTimeMillis() + BOUNDARY_JITTER_OFFSET_MS)
+            .coerceAtLeast(BOUNDARY_JITTER_OFFSET_MS)
+        if (waitMillis > MAX_BOUNDARY_WAIT_MILLIS) return
+
+        phaseBoundaryJob = serviceScope.launch {
+            delay(waitMillis)
+            triggerSync(rescheduleAlarms = true, forceAlert = true)
         }
     }
 
@@ -206,6 +232,11 @@ class ScheduleGuardService : Service() {
         stopSelf()
     }
 
+    private data class GuardSnapshot(
+        val statusText: String,
+        val nextBoundaryMillis: Long?,
+    )
+
     companion object {
         // Strictly isolated from LiveUpdateManager.CHANNEL_ID and LIVE_UPDATE_NOTIFICATION_ID
         const val CHANNEL_ID = "ripple_plan_guard_service"
@@ -216,8 +247,10 @@ class ScheduleGuardService : Service() {
         const val ACTION_STOP_GUARD = "com.example.action.STOP_SCHEDULE_GUARD"
 
         private const val GUARD_CONTENT_REQUEST_CODE = 2002
-        private const val GUARD_RESTART_REQUEST_CODE = 2003
         private const val RESCHEDULE_INTERVAL_MILLIS = 15 * 60_000L
+        private const val BOUNDARY_JITTER_OFFSET_MS = 400L
+        private const val MAX_BOUNDARY_WAIT_MILLIS = 20 * 60_000L
+        private const val RESURRECT_DELAY_MS = 1_500L
 
         @Volatile
         var isRunning: Boolean = false
@@ -312,7 +345,7 @@ class ScheduleGuardService : Service() {
             }
         }
 
-        private suspend fun resolveGuardStatusText(context: Context, nowMillis: Long): String {
+        private suspend fun resolveGuardSnapshot(context: Context, nowMillis: Long): GuardSnapshot {
             val idleText = context.getString(R.string.guard_notification_idle)
             return runCatching {
                 val db = ScheduleDatabase.getInstance(context)
@@ -322,17 +355,33 @@ class ScheduleGuardService : Service() {
 
                 data class Candidate(
                     val title: String,
+                    val reminderTriggerMillis: Long?,
                     val startMillis: Long,
                     val endMillis: Long,
+                    val isTest: Boolean,
                 )
 
                 val candidates = mutableListOf<Candidate>()
 
                 scheduleDao.getAllIncompleteSchedules().forEach { s ->
-                    if (s.isTestSchedule) return@forEach
-                    val isTodayOrActive = DateTimeUtils.isToday(s.startTimeMillis, nowMillis) || s.isInProgress(nowMillis)
+                    val isTodayOrActive = DateTimeUtils.isToday(s.startTimeMillis, nowMillis) ||
+                        s.isInProgress(nowMillis) ||
+                        s.isTestSchedule
                     if (!isTodayOrActive || s.endTimeMillis <= nowMillis) return@forEach
-                    candidates.add(Candidate(s.title, s.startTimeMillis, s.endTimeMillis))
+                    val reminderAt = if (s.reminderMinutesBefore > 0) {
+                        s.startTimeMillis - s.reminderMinutesBefore * 60_000L
+                    } else {
+                        null
+                    }
+                    candidates.add(
+                        Candidate(
+                            title = s.title,
+                            reminderTriggerMillis = reminderAt,
+                            startMillis = s.startTimeMillis,
+                            endMillis = s.endTimeMillis,
+                            isTest = s.isTestSchedule,
+                        ),
+                    )
                 }
 
                 if (prefs.courseReminderEnabled) {
@@ -364,19 +413,44 @@ class ScheduleGuardService : Service() {
                             val startMs = if (nowMillis >= rawStart) rawStart else rawStart + snoozeMs
                             val endMs = (rawEnd + snoozeMs).coerceAtLeast(startMs + 60_000L)
                             if (endMs <= nowMillis) return@forEach
-                            candidates.add(Candidate(course.name, startMs, endMs))
+                            val reminderAt = if (prefs.courseReminderLeadMinutes > 0) {
+                                startMs - prefs.courseReminderLeadMinutes * 60_000L
+                            } else {
+                                null
+                            }
+                            candidates.add(
+                                Candidate(
+                                    title = course.name,
+                                    reminderTriggerMillis = reminderAt,
+                                    startMillis = startMs,
+                                    endMillis = endMs,
+                                    isTest = false,
+                                ),
+                            )
                         }
                     }
                 }
 
+                val nextBoundary = candidates
+                    .flatMap { candidate ->
+                        listOfNotNull(
+                            candidate.reminderTriggerMillis,
+                            candidate.startMillis,
+                            candidate.endMillis,
+                        )
+                    }
+                    .filter { it > nowMillis }
+                    .minOrNull()
+
                 val chosen = candidates
+                    .filter { !it.isTest }
                     .sortedWith(
                         compareByDescending<Candidate> { nowMillis in it.startMillis until it.endMillis }
                             .thenBy { it.startMillis },
                     )
                     .firstOrNull()
 
-                if (chosen == null) {
+                val statusText = if (chosen == null) {
                     idleText
                 } else {
                     val inProgress = nowMillis in chosen.startMillis until chosen.endMillis
@@ -388,28 +462,15 @@ class ScheduleGuardService : Service() {
                         idleText = idleText,
                     )
                 }
-            }.getOrDefault(idleText)
+                GuardSnapshot(statusText = statusText, nextBoundaryMillis = nextBoundary)
+            }.getOrDefault(GuardSnapshot(statusText = idleText, nextBoundaryMillis = null))
         }
 
-        private fun scheduleDelayedRestartRecovery(context: Context) {
+        internal fun scheduleResurrectionRecovery(context: Context) {
             val appContext = context.applicationContext
             ScheduleGuardWorkScheduler.enqueueDelayedRecovery(appContext)
             runCatching {
-                val alarmManager = appContext.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-                val restartIntent = Intent(appContext, ScheduleAlarmReceiver::class.java).apply {
-                    action = ScheduleAlarmReceiver.ACTION_GUARD_RESTART
-                }
-                val pi = PendingIntent.getBroadcast(
-                    appContext,
-                    GUARD_RESTART_REQUEST_CODE,
-                    restartIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
-                alarmManager?.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    System.currentTimeMillis() + 3_000L,
-                    pi,
-                )
+                ScheduleAlarmScheduler(appContext).scheduleGuardResurrection(RESURRECT_DELAY_MS)
             }
         }
     }

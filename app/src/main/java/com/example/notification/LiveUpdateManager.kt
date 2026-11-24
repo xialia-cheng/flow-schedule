@@ -52,6 +52,7 @@ class LiveUpdateManager(private val context: Context) {
     private var currentlyPostedKey: String? = null
     private var currentlyPostedSourceId: Long? = null
     private var currentlyPostedSignature: String? = null
+    private var currentlyPostedIsInProgress: Boolean? = null
     private var lastPromotableCharacteristics: Boolean? = null
 
     private var activeFocusItem: LiveActivityItem? = null
@@ -413,7 +414,10 @@ class LiveUpdateManager(private val context: Context) {
         }
 
         val isSameItem = currentlyPostedKey == activeItem.uniqueKey
-        val silentUpdate = isSameItem && !forceAlert
+        val phaseChanged = isSameItem &&
+            currentlyPostedIsInProgress != null &&
+            currentlyPostedIsInProgress != isInProgress
+        val silentUpdate = isSameItem && !forceAlert && !phaseChanged
 
         val notification = buildLiveActivityNotification(activeItem, nowMillis, silentUpdate)
 
@@ -426,6 +430,7 @@ class LiveUpdateManager(private val context: Context) {
         currentlyPostedKey = activeItem.uniqueKey
         currentlyPostedSourceId = activeItem.sourceId
         currentlyPostedSignature = postSignature
+        currentlyPostedIsInProgress = isInProgress
         lastPostedEndTimeMillis = activeItem.endTimeMillis
 
         @SuppressLint("MissingPermission")
@@ -456,6 +461,7 @@ class LiveUpdateManager(private val context: Context) {
         currentlyPostedKey = null
         currentlyPostedSourceId = null
         currentlyPostedSignature = null
+        currentlyPostedIsInProgress = null
         lastPostedEndTimeMillis = 0L
         _activeLiveActivity.value = null
         restoreDndIfEnabledByApp()

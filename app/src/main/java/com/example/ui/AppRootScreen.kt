@@ -163,6 +163,9 @@ fun AppRootScreen(
             notes = testNotes,
         )
     }
+    val stopTestFluidCloud: () -> Unit = {
+        scheduleViewModel.stopFluidCloudTest()
+    }
 
     // Subtle Gemini-inspired ambient blue-violet top atmospheric glow behind the transparent status bar
     val glowPrimary = flowColors.glowPrimary.copy(alpha = if (flowColors.isDark) 0.13f else 0.065f)
@@ -278,6 +281,7 @@ fun AppRootScreen(
                             onOpenPermissions = { scheduleViewModel.openPermissionSheet() },
                             onOpenDndPolicySettings = onOpenDndPolicySettings,
                             onTriggerFluidCloudTest = triggerTestFluidCloud,
+                            onStopFluidCloudTest = stopTestFluidCloud,
                         )
                     }
                 }
@@ -360,6 +364,7 @@ fun AppRootScreen(
                         onOpenPermissions = { scheduleViewModel.openPermissionSheet() },
                         onOpenDndPolicySettings = onOpenDndPolicySettings,
                         onTriggerFluidCloudTest = triggerTestFluidCloud,
+                        onStopFluidCloudTest = stopTestFluidCloud,
                     )
                 }
             }
@@ -494,6 +499,7 @@ private fun TabContentHost(
     onOpenPermissions: () -> Unit,
     onOpenDndPolicySettings: () -> Unit,
     onTriggerFluidCloudTest: () -> Unit,
+    onStopFluidCloudTest: () -> Unit,
 ) {
     AnimatedContent(
         targetState = currentTab,
@@ -542,6 +548,7 @@ private fun TabContentHost(
                 onOpenPermissions = onOpenPermissions,
                 onOpenDndPolicySettings = onOpenDndPolicySettings,
                 onTriggerFluidCloudTest = onTriggerFluidCloudTest,
+                onStopFluidCloudTest = onStopFluidCloudTest,
                 onShowMessage = onShowMessage,
             )
         }

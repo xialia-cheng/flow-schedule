@@ -23,9 +23,11 @@ import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.NetworkCheck
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material.icons.rounded.Update
 import androidx.compose.material.icons.rounded.Visibility
@@ -202,6 +204,7 @@ internal fun AdvancedAndAboutSectionContent(
     hasActiveTestSchedule: Boolean,
     updateState: AppUpdateUiState,
     onTriggerFluidCloudTest: () -> Unit,
+    onStopFluidCloudTest: () -> Unit = {},
     onCheckUpdatesClick: () -> Unit,
     onAutoCheckUpdatesChange: (Boolean) -> Unit,
     onOpenAboutSheet: () -> Unit,
@@ -214,6 +217,7 @@ internal fun AdvancedAndAboutSectionContent(
     FluidCloudTestCard(
         hasActiveTest = hasActiveTestSchedule,
         onTriggerTest = onTriggerFluidCloudTest,
+        onStopTest = onStopFluidCloudTest,
     )
 
     HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.7f))
@@ -415,6 +419,7 @@ internal fun AdvancedAndAboutSectionContent(
 private fun FluidCloudTestCard(
     hasActiveTest: Boolean,
     onTriggerTest: () -> Unit,
+    onStopTest: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
@@ -425,7 +430,7 @@ private fun FluidCloudTestCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .clickable {
+            .clickable(enabled = !hasActiveTest) {
                 haptics.tick()
                 onTriggerTest()
             }
@@ -442,57 +447,127 @@ private fun FluidCloudTestCard(
             ),
         ),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(colorScheme.primary.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.AutoAwesome,
-                    contentDescription = null,
-                    tint = colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(colorScheme.primary.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AutoAwesome,
+                        contentDescription = null,
+                        tint = colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.test_fluid_cloud_btn),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = colorScheme.onSurface,
+                    )
+                    Text(
+                        text = if (hasActiveTest) {
+                            "1 分钟测试正在实况通知中倒计时，可随时停止或重发"
+                        } else {
+                            "实况通知调试与效果演练（含 @地点、分段进度条与快捷操作）"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (!hasActiveTest) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(colorScheme.primary),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = "发起实况通知测试",
+                            tint = colorScheme.onPrimary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.test_fluid_cloud_btn),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = colorScheme.onSurface,
-                )
-                Text(
-                    text = if (hasActiveTest) {
-                        "1 分钟测试正在实况通知中倒计时，点击可重新发起"
-                    } else {
-                        "实况通知调试与效果演练（含 @地点、分段进度条与快捷操作）"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colorScheme.onSurfaceVariant,
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(colorScheme.primary),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = "发起实况通知测试",
-                    tint = colorScheme.onPrimary,
-                    modifier = Modifier.size(18.dp),
-                )
+
+            if (hasActiveTest) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            haptics.confirm()
+                            onStopTest()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("mine_stop_fluid_cloud_button"),
+                        colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                            containerColor = colorScheme.errorContainer,
+                            contentColor = colorScheme.onErrorContainer,
+                        ),
+                        shape = MaterialTheme.shapes.small,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Stop,
+                            contentDescription = "停止实况通知测试",
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "停止测试",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            haptics.tick()
+                            onTriggerTest()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("mine_retrigger_fluid_cloud_button"),
+                        shape = MaterialTheme.shapes.small,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = "重新发起实况通知测试",
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "重发测试",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                }
             }
         }
     }

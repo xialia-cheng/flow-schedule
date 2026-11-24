@@ -86,11 +86,42 @@ class ScheduleAlarmScheduler(private val context: Context) {
         }
     }
 
+    fun cancelAlarmsForTestSchedule(scheduleId: Long) {
+        val base = (scheduleId.toInt() and 0x3FFF) * 8
+        for (day in 0..7) {
+            cancelAlarmsForKey(800_000 + day * 50_000 + base)
+        }
+    }
+
     fun cancelAlarmsForCourse(courseId: Long) {
         val base = (courseId.toInt() and 0x3FFF) * 8
         for (day in 0..7) {
             cancelAlarmsForKey(400_000 + day * 50_000 + base)
         }
+    }
+
+    /**
+     * Schedules an AlarmManager broadcast 1.5s after task swipe removal using setAlarmClock
+     * (when permitted) so the OS grants an exact-alarm exemption to revive [ScheduleGuardService]
+     * and re-post any active Fluid Cloud Live Update notification.
+     */
+    fun scheduleGuardResurrection(delayMillis: Long = 1_500L) {
+        val triggerAtMillis = System.currentTimeMillis() + delayMillis.coerceAtLeast(500L)
+        val restartIntent = Intent(context, ScheduleAlarmReceiver::class.java).apply {
+            action = ScheduleAlarmReceiver.ACTION_RESURRECT_GUARD
+            putExtra(EXTRA_TRIGGER_MILLIS, triggerAtMillis)
+        }
+        val pi = PendingIntent.getBroadcast(
+            context,
+            GUARD_RESURRECT_REQUEST_CODE,
+            restartIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        scheduleExactOrFallbackAlarm(
+            triggerAtMillis = triggerAtMillis,
+            pendingIntent = pi,
+            useAlarmClock = true,
+        )
     }
 
     private fun cancelAlarmsForKey(baseKey: Int) {
@@ -325,6 +356,7 @@ class ScheduleAlarmScheduler(private val context: Context) {
         const val PHASE_DAILY_ROLLOVER = 8
 
         private const val SYSTEM_DAILY_ROLLOVER_REQUEST_KEY = 920_000
+        private const val GUARD_RESURRECT_REQUEST_CODE = 925_001
         private const val RE_REMINDER_REQUEST_BASE = 850_000
         private const val PREFS_RE_REMINDERS = "flow_re_reminders"
 

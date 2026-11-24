@@ -33,8 +33,14 @@ interface ScheduleDao {
     @Query("DELETE FROM schedules WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("SELECT * FROM schedules WHERE isTestSchedule = 1 AND isCompleted = 0")
+    suspend fun getActiveTestSchedules(): List<ScheduleEntity>
+
     @Query("DELETE FROM schedules WHERE isTestSchedule = 1 AND isCompleted = 1")
     suspend fun deleteCompletedTestSchedules()
+
+    @Query("DELETE FROM schedules WHERE isTestSchedule = 1")
+    suspend fun deleteAllTestSchedules()
 
     @Query(
         "UPDATE schedules SET customTagName = :name, customTagColorHex = :colorHex WHERE customTagId = :tagId",

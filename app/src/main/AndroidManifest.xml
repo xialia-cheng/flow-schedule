@@ -17,6 +17,8 @@
     <!-- All-day background guard foreground service (specialUse) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Short partial wake lock in ScheduleAlarmReceiver for reliable lock-screen transitions -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:name=".ScheduleApp"
@@ -65,6 +67,7 @@
             android:name=".notification.ScheduleGuardService"
             android:enabled="true"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"

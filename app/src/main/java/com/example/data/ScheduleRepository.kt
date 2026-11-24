@@ -39,6 +39,10 @@ class ScheduleRepository(
         )
     }
 
+    suspend fun stopTestFluidCloudSchedules() {
+        liveUpdateCoordinator.stopCourseLivePreview()
+    }
+
     suspend fun toggleComplete(scheduleId: Long, completed: Boolean) {
         val current = dao.getScheduleById(scheduleId) ?: return
         if (completed) {
@@ -94,6 +98,9 @@ class ScheduleRepository(
 
     suspend fun deleteSchedule(schedule: ScheduleEntity) {
         alarmScheduler.cancelAlarmsForSchedule(schedule.id)
+        if (schedule.isTestSchedule) {
+            alarmScheduler.cancelAlarmsForTestSchedule(schedule.id)
+        }
         alarmScheduler.cancelCustomReReminder(isCourse = false, itemId = schedule.id)
         dao.deleteById(schedule.id)
         liveUpdateCoordinator.syncAll(rescheduleAlarms = false)

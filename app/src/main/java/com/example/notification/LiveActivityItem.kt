@@ -177,7 +177,11 @@ data class LiveActivityItem(
 
     fun alarmRequestKey(): Int {
         val base = (sourceId.toInt() and 0x3FFF) * 8
-        val typeOffset = if (sourceType == LiveActivitySourceType.COURSE) 400_000 else 0
+        val typeOffset = when {
+            isTest -> 800_000
+            sourceType == LiveActivitySourceType.COURSE -> 400_000
+            else -> 0
+        }
         val dayHash = (DateTimeUtils.isoDayOfWeek(startTimeMillis) and 0x7) * 50_000
         return typeOffset + dayHash + base
     }
