@@ -62,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 import com.example.ui.update.AppUpdateUiState
@@ -106,6 +107,7 @@ fun AboutHelpLicenseSheet(
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
     val context = LocalContext.current
+    val haptics = rememberAppHaptics()
     var licenseExpanded by rememberSaveable { mutableStateOf(false) }
 
     ModalBottomSheet(
@@ -143,7 +145,10 @@ fun AboutHelpLicenseSheet(
                     )
                 }
                 TextButton(
-                    onClick = onDismiss,
+                    onClick = {
+                        haptics.tick()
+                        onDismiss()
+                    },
                     modifier = Modifier.testTag("about_sheet_close"),
                 ) {
                     Text("关闭")
@@ -219,6 +224,7 @@ fun AboutHelpLicenseSheet(
                             .defaultMinSize(minHeight = 48.dp)
                             .clip(MaterialTheme.shapes.medium)
                             .clickable {
+                                haptics.tick()
                                 val intent = Intent(Intent.ACTION_SENDTO).apply {
                                     data = Uri.parse("mailto:$AUTHOR_EMAIL")
                                     putExtra(Intent.EXTRA_SUBJECT, "微澜日程（RipplePlan v${BuildConfig.VERSION_NAME}）反馈")
@@ -280,6 +286,7 @@ fun AboutHelpLicenseSheet(
                             .defaultMinSize(minHeight = 48.dp)
                             .clip(MaterialTheme.shapes.medium)
                             .clickable {
+                                haptics.tick()
                                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(REPO_URL))
                                 runCatching { context.startActivity(intent) }.onFailure {
                                     onShowMessage("无法打开浏览器，请访问：$REPO_URL")
@@ -337,7 +344,10 @@ fun AboutHelpLicenseSheet(
                             .fillMaxWidth()
                             .defaultMinSize(minHeight = 48.dp)
                             .clip(MaterialTheme.shapes.medium)
-                            .clickable(enabled = !updateState.isChecking) { onCheckUpdates() }
+                            .clickable(enabled = !updateState.isChecking) {
+                                haptics.tick()
+                                onCheckUpdates()
+                            }
                             .testTag("about_check_update_button"),
                     ) {
                         Row(
@@ -483,7 +493,10 @@ fun AboutHelpLicenseSheet(
                             .fillMaxWidth()
                             .defaultMinSize(minHeight = 48.dp)
                             .clip(MaterialTheme.shapes.medium)
-                            .clickable { licenseExpanded = !licenseExpanded }
+                            .clickable {
+                                haptics.tick()
+                                licenseExpanded = !licenseExpanded
+                            }
                             .testTag("about_mit_toggle"),
                     ) {
                         Row(

@@ -62,6 +62,7 @@ fun FluidCloudCapsuleBanner(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     val isInProgress = item.isInProgress(nowMillis)
     val targetMillis = if (isInProgress) item.endTimeMillis else item.startTimeMillis
@@ -93,7 +94,10 @@ fun FluidCloudCapsuleBanner(
             .padding(horizontal = 12.dp, vertical = 4.dp)
             .defaultMinSize(minHeight = 48.dp)
             .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onOpenPermissions)
+            .clickable {
+                haptics.tick()
+                onOpenPermissions()
+            }
             .testTag("timetable_fluid_cloud_banner"),
         shape = RoundedCornerShape(16.dp),
         color = accent.copy(alpha = if (flowColors.isDark) 0.16f else 0.11f),

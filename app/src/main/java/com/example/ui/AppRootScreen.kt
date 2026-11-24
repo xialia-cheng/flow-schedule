@@ -36,6 +36,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,9 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import android.view.HapticFeedbackConstants
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -56,9 +55,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
+import com.example.ui.components.LocalAppHapticsEnabled
 import com.example.ui.components.PermissionOnboardingSheet
 import com.example.ui.components.SmartDraftPreviewSheet
 import com.example.ui.components.SmartQuickCaptureSheet
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.mine.MineScreen
 import com.example.ui.navigation.AppDestination
 import com.example.ui.smart.SmartCaptureUiState
@@ -93,11 +94,11 @@ fun AppRootScreen(
     // Timetable is the default home tab
     var currentTab by rememberSaveable { mutableStateOf(AppDestination.TIMETABLE) }
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
+    val timetableState by timetableViewModel.uiState.collectAsStateWithLifecycle()
     val smartState by smartCaptureViewModel.uiState.collectAsStateWithLifecycle()
     val updateState by appUpdateViewModel.uiState.collectAsStateWithLifecycle()
     val snackbarEvent by scheduleViewModel.snackbarEvent.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    val rootView = LocalView.current
     val scope = rememberCoroutineScope()
 
     val colorScheme = MaterialTheme.colorScheme
@@ -165,6 +166,11 @@ fun AppRootScreen(
     val glowPrimary = flowColors.glowPrimary.copy(alpha = if (flowColors.isDark) 0.13f else 0.065f)
     val glowSecondary = flowColors.glowSecondary.copy(alpha = if (flowColors.isDark) 0.10f else 0.05f)
 
+    CompositionLocalProvider(
+        LocalAppHapticsEnabled provides timetableState.settings.hapticFeedbackEnabled,
+    ) {
+    val haptics = rememberAppHaptics()
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -213,7 +219,10 @@ fun AppRootScreen(
                             val selected = currentTab == destination
                             NavigationRailItem(
                                 selected = selected,
-                                onClick = { rootView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); currentTab = destination },
+                                onClick = {
+                                    haptics.tick()
+                                    currentTab = destination
+                                },
                                 icon = {
                                     val showUpdateDot = destination == AppDestination.MINE && updateState.availableRelease != null
                                     BadgedBox(
@@ -291,7 +300,10 @@ fun AppRootScreen(
                                 val selected = currentTab == destination
                                 NavigationBarItem(
                                     selected = selected,
-                                    onClick = { currentTab = destination },
+                                    onClick = {
+                                        haptics.tick()
+                                        currentTab = destination
+                                    },
                                     icon = {
                                         val showUpdateDot = destination == AppDestination.MINE && updateState.availableRelease != null
                                         BadgedBox(
@@ -393,6 +405,7 @@ fun AppRootScreen(
             onDismiss = { appUpdateViewModel.dismissUpdateDialog() },
             onShowMessage = showMessage,
         )
+    }
     }
 }
 

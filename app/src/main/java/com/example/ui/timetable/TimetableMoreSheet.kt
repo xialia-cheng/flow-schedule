@@ -91,6 +91,7 @@ import com.example.data.DndLevel
 import com.example.data.SectionTimeEntity
 import com.example.data.TimetableEntity
 import com.example.data.WeekStartDay
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 import kotlin.math.roundToInt
@@ -132,6 +133,7 @@ fun TimetableMoreSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     var showCreateTimetableDialog by remember { mutableStateOf(false) }
     var showSectionTimesDialog by remember { mutableStateOf(false) }
@@ -199,7 +201,10 @@ fun TimetableMoreSheet(
 
                         if (!state.isViewingCurrentWeek) {
                             TextButton(
-                                onClick = onJumpCurrentWeek,
+                                onClick = {
+                                    haptics.tick()
+                                    onJumpCurrentWeek()
+                                },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             ) {
                                 Text("回到本周", color = colorScheme.primary)
@@ -209,7 +214,11 @@ fun TimetableMoreSheet(
 
                     Slider(
                         value = state.displayedWeek.toFloat(),
-                        onValueChange = { onSelectWeek(it.roundToInt()) },
+                        onValueChange = {
+                            val next = it.roundToInt()
+                            if (next != state.displayedWeek) haptics.tick()
+                            onSelectWeek(next)
+                        },
                         valueRange = 1f..totalWeeks.toFloat().coerceAtLeast(2f),
                         steps = (totalWeeks - 2).coerceAtLeast(0),
                         modifier = Modifier.testTag("week_slider"),
@@ -237,7 +246,10 @@ fun TimetableMoreSheet(
                             color = colorScheme.onSurface,
                         )
                         TextButton(
-                            onClick = { showCreateTimetableDialog = true },
+                            onClick = {
+                                haptics.tick()
+                                showCreateTimetableDialog = true
+                            },
                             modifier = Modifier.testTag("create_timetable_button"),
                         ) {
                             Icon(Icons.Rounded.Add, null, Modifier.size(16.dp))
@@ -256,7 +268,10 @@ fun TimetableMoreSheet(
                             val selected = tt.id == state.activeTimetable?.id
                             FilterChip(
                                 selected = selected,
-                                onClick = { onSwitchTimetable(tt.id) },
+                                onClick = {
+                                    haptics.tick()
+                                    onSwitchTimetable(tt.id)
+                                },
                                 label = { Text(tt.name) },
                                 shape = CircleShape,
                                 colors = FilterChipDefaults.filterChipColors(
@@ -349,7 +364,10 @@ fun TimetableMoreSheet(
                             val selected = state.settings.themeMode == mode
                             FilterChip(
                                 selected = selected,
-                                onClick = { onSetThemeMode(mode) },
+                                onClick = {
+                                    haptics.tick()
+                                    onSetThemeMode(mode)
+                                },
                                 label = { Text(mode.label) },
                                 modifier = Modifier
                                     .weight(1f)
@@ -385,7 +403,10 @@ fun TimetableMoreSheet(
                         Spacer(Modifier.width(12.dp))
                         Switch(
                             checked = state.settings.compactMode,
-                            onCheckedChange = onSetCompactMode,
+                            onCheckedChange = {
+                                haptics.tick()
+                                onSetCompactMode(it)
+                            },
                             modifier = Modifier.testTag("more_compact_mode_switch"),
                         )
                     }
@@ -519,11 +540,15 @@ private fun MoreActionTile(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     Surface(
         modifier = modifier
             .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick),
+            .clickable {
+                haptics.tick()
+                onClick()
+            },
         shape = MaterialTheme.shapes.medium,
         color = flowColors.cardElevated,
         border = BorderStroke(1.dp, colorScheme.outlineVariant),
@@ -574,6 +599,7 @@ private fun CreateTimetableDialog(
     onDismiss: () -> Unit,
     onCreate: (name: String, totalWeeks: Int) -> Unit,
 ) {
+    val haptics = rememberAppHaptics()
     var name by remember { mutableStateOf("") }
     var totalWeeks by remember { mutableIntStateOf(20) }
 
@@ -604,7 +630,10 @@ private fun CreateTimetableDialog(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         FilledTonalButton(
-                            onClick = { if (totalWeeks > 1) totalWeeks-- },
+                            onClick = {
+                                haptics.tick()
+                                if (totalWeeks > 1) totalWeeks--
+                            },
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                             modifier = Modifier.height(32.dp),
                         ) { Text("-") }
@@ -614,7 +643,10 @@ private fun CreateTimetableDialog(
                             fontWeight = FontWeight.Bold,
                         )
                         FilledTonalButton(
-                            onClick = { if (totalWeeks < CourseEntity.MAX_TOTAL_WEEKS) totalWeeks++ },
+                            onClick = {
+                                haptics.tick()
+                                if (totalWeeks < CourseEntity.MAX_TOTAL_WEEKS) totalWeeks++
+                            },
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                             modifier = Modifier.height(32.dp),
                         ) { Text("+") }
@@ -622,18 +654,30 @@ private fun CreateTimetableDialog(
                 }
                 Slider(
                     value = totalWeeks.toFloat(),
-                    onValueChange = { totalWeeks = it.roundToInt().coerceIn(1, CourseEntity.MAX_TOTAL_WEEKS) },
+                    onValueChange = {
+                        val next = it.roundToInt().coerceIn(1, CourseEntity.MAX_TOTAL_WEEKS)
+                        if (next != totalWeeks) {
+                            haptics.tick()
+                            totalWeeks = next
+                        }
+                    },
                     valueRange = 1f..CourseEntity.MAX_TOTAL_WEEKS.toFloat(),
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(name, totalWeeks) }) {
+            TextButton(onClick = {
+                haptics.confirm()
+                onCreate(name, totalWeeks)
+            }) {
                 Text("创建")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = {
+                haptics.tick()
+                onDismiss()
+            }) { Text("取消") }
         },
     )
 }
@@ -677,6 +721,7 @@ private fun TimetableSettingsDialog(
     onDismiss: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     val maxAfterSection = (sectionTimes.size - 1).coerceAtLeast(1)
 
     var name by remember(timetable) { mutableStateOf(timetable.name) }
@@ -752,7 +797,10 @@ private fun TimetableSettingsDialog(
                             )
                         }
                     }
-                    IconButton(onClick = onDismiss) {
+                    IconButton(onClick = {
+                        haptics.tick()
+                        onDismiss()
+                    }) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "关闭",
@@ -811,7 +859,10 @@ private fun TimetableSettingsDialog(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
                                     FilledTonalButton(
-                                        onClick = { if (totalWeeks > 1) totalWeeks-- },
+                                        onClick = {
+                                            haptics.tick()
+                                            if (totalWeeks > 1) totalWeeks--
+                                        },
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                         modifier = Modifier
                                             .height(30.dp)
@@ -824,7 +875,10 @@ private fun TimetableSettingsDialog(
                                         color = colorScheme.primary,
                                     )
                                     FilledTonalButton(
-                                        onClick = { if (totalWeeks < CourseEntity.MAX_TOTAL_WEEKS) totalWeeks++ },
+                                        onClick = {
+                                            haptics.tick()
+                                            if (totalWeeks < CourseEntity.MAX_TOTAL_WEEKS) totalWeeks++
+                                        },
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                         modifier = Modifier
                                             .height(30.dp)
@@ -834,7 +888,13 @@ private fun TimetableSettingsDialog(
                             }
                             Slider(
                                 value = totalWeeks.toFloat(),
-                                onValueChange = { totalWeeks = it.roundToInt().coerceIn(1, CourseEntity.MAX_TOTAL_WEEKS) },
+                                onValueChange = {
+                                    val next = it.roundToInt().coerceIn(1, CourseEntity.MAX_TOTAL_WEEKS)
+                                    if (next != totalWeeks) {
+                                        haptics.tick()
+                                        totalWeeks = next
+                                    }
+                                },
                                 valueRange = 1f..CourseEntity.MAX_TOTAL_WEEKS.toFloat(),
                                 modifier = Modifier.testTag("settings_total_weeks_slider"),
                             )
@@ -857,6 +917,7 @@ private fun TimetableSettingsDialog(
                                     FilterChip(
                                         selected = weekStartDay == dayOpt,
                                         onClick = {
+                                            haptics.tick()
                                             onSetWeekStartDay(dayOpt)
                                             startMonday = DateTimeUtils.weekStartOfWeekMillis(startMonday, dayOpt)
                                         },
@@ -881,7 +942,10 @@ private fun TimetableSettingsDialog(
                         if (canDelete) {
                             HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
                             TextButton(
-                                onClick = onDelete,
+                                onClick = {
+                                    haptics.tick()
+                                    onDelete()
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Icon(Icons.Rounded.DeleteOutline, null, tint = FlowTheme.colors.deleteAccent)
@@ -898,6 +962,7 @@ private fun TimetableSettingsDialog(
                         trailing = {
                             TextButton(
                                 onClick = {
+                                    haptics.tick()
                                     onSetRowHeightDp(72)
                                     onSetFontScale(1.0f)
                                 },
@@ -943,6 +1008,7 @@ private fun TimetableSettingsDialog(
                             Slider(
                                 value = rowHeightDp.toFloat().coerceIn(54f, 108f),
                                 onValueChange = { onSetRowHeightDp(it.roundToInt()) },
+                                onValueChangeFinished = { haptics.tick() },
                                 valueRange = 54f..108f,
                                 modifier = Modifier.testTag("settings_row_height_slider"),
                             )
@@ -965,6 +1031,7 @@ private fun TimetableSettingsDialog(
                             Slider(
                                 value = fontScale,
                                 onValueChange = { onSetFontScale(it) },
+                                onValueChangeFinished = { haptics.tick() },
                                 valueRange = 0.80f..1.35f,
                                 modifier = Modifier.testTag("settings_font_scale_slider"),
                             )
@@ -1083,7 +1150,10 @@ private fun TimetableSettingsDialog(
                                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         ) {
                                             FilledTonalButton(
-                                                onClick = { if (lunchAfter > 1) lunchAfter-- },
+                                                onClick = {
+                                                    haptics.tick()
+                                                    if (lunchAfter > 1) lunchAfter--
+                                                },
                                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                                 modifier = Modifier
                                                     .height(30.dp)
@@ -1096,7 +1166,10 @@ private fun TimetableSettingsDialog(
                                                 color = colorScheme.primary,
                                             )
                                             FilledTonalButton(
-                                                onClick = { if (lunchAfter < maxAfterSection) lunchAfter++ },
+                                                onClick = {
+                                                    haptics.tick()
+                                                    if (lunchAfter < maxAfterSection) lunchAfter++
+                                                },
                                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                                 modifier = Modifier
                                                     .height(30.dp)
@@ -1180,12 +1253,16 @@ private fun TimetableSettingsDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(onClick = {
+                        haptics.tick()
+                        onDismiss()
+                    }) {
                         Text("取消")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
+                            haptics.confirm()
                             onSetExtraBannerConfig(bannerTitle, bannerStart, bannerEnd)
                             onSetLunchBreakConfig(lunchTitle, lunchAfter, lunchStart, lunchEnd)
                             onSave(name, startMonday, totalWeeks)
@@ -1206,6 +1283,7 @@ private fun TimetableSettingsDialog(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        haptics.confirm()
                         pickerState.selectedDateMillis?.let {
                             startMonday = DateTimeUtils.weekStartOfWeekMillis(it, weekStartDay)
                         }
@@ -1214,7 +1292,10 @@ private fun TimetableSettingsDialog(
                 ) { Text("确定") }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
+                TextButton(onClick = {
+                    haptics.tick()
+                    showDatePicker = false
+                }) { Text("取消") }
             },
         ) {
             DatePicker(state = pickerState)
@@ -1290,11 +1371,15 @@ private fun SettingsNavigationRow(
     modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
-            .clickable(onClick = onClick)
+            .clickable {
+                haptics.tick()
+                onClick()
+            }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1343,6 +1428,7 @@ private fun SwitchSettingRow(
     modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -1367,7 +1453,13 @@ private fun SwitchSettingRow(
                 )
             }
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = {
+                haptics.tick()
+                onCheckedChange(it)
+            },
+        )
     }
 }
 
@@ -1380,6 +1472,7 @@ private fun AddedCoursesDialog(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1403,7 +1496,10 @@ private fun AddedCoursesDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(MaterialTheme.shapes.small)
-                                .clickable { onEdit(course) },
+                                .clickable {
+                                    haptics.tick()
+                                    onEdit(course)
+                                },
                             shape = MaterialTheme.shapes.small,
                             color = colorScheme.surfaceContainerLow,
                         ) {
@@ -1441,7 +1537,10 @@ private fun AddedCoursesDialog(
                                         )
                                     }
                                 }
-                                IconButton(onClick = { onDelete(course) }) {
+                                IconButton(onClick = {
+                                    haptics.tick()
+                                    onDelete(course)
+                                }) {
                                     Icon(
                                         imageVector = Icons.Rounded.DeleteOutline,
                                         contentDescription = "删除课程",
@@ -1456,7 +1555,10 @@ private fun AddedCoursesDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("完成") }
+            TextButton(onClick = {
+                haptics.tick()
+                onDismiss()
+            }) { Text("完成") }
         },
     )
 }
@@ -1480,6 +1582,7 @@ private fun CourseReminderDialog(
     onTriggerFluidCloudTest: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val haptics = rememberAppHaptics()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("通知、实况通知与免打扰") },
@@ -1507,7 +1610,10 @@ private fun CourseReminderDialog(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         FilledTonalButton(
-                            onClick = { onSelectLeadMinutes((leadMinutes - 5).coerceAtLeast(0)) },
+                            onClick = {
+                                haptics.tick()
+                                onSelectLeadMinutes((leadMinutes - 5).coerceAtLeast(0))
+                            },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             modifier = Modifier.height(28.dp),
                         ) { Text("-5") }
@@ -1518,7 +1624,10 @@ private fun CourseReminderDialog(
                             color = MaterialTheme.colorScheme.primary,
                         )
                         FilledTonalButton(
-                            onClick = { onSelectLeadMinutes((leadMinutes + 5).coerceAtMost(120)) },
+                            onClick = {
+                                haptics.tick()
+                                onSelectLeadMinutes((leadMinutes + 5).coerceAtMost(120))
+                            },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             modifier = Modifier.height(28.dp),
                         ) { Text("+5") }
@@ -1528,7 +1637,10 @@ private fun CourseReminderDialog(
                     listOf(0, 5, 10, 15, 20, 30, 45).forEach { mins ->
                         FilterChip(
                             selected = leadMinutes == mins,
-                            onClick = { onSelectLeadMinutes(mins) },
+                            onClick = {
+                                haptics.tick()
+                                onSelectLeadMinutes(mins)
+                            },
                             label = { Text(if (mins == 0) "准点" else "${mins}分") },
                             shape = CircleShape,
                         )
@@ -1545,7 +1657,10 @@ private fun CourseReminderDialog(
                     DndLevel.entries.forEach { level ->
                         FilterChip(
                             selected = dndLevel == level,
-                            onClick = { onSelectDndLevel(level) },
+                            onClick = {
+                                haptics.tick()
+                                onSelectDndLevel(level)
+                            },
                             label = { Text(level.label) },
                             shape = CircleShape,
                         )
@@ -1585,7 +1700,10 @@ private fun CourseReminderDialog(
                 )
 
                 Button(
-                    onClick = onTriggerFluidCloudTest,
+                    onClick = {
+                        haptics.tick()
+                        onTriggerFluidCloudTest()
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
                 ) {
@@ -1595,7 +1713,10 @@ private fun CourseReminderDialog(
                 }
 
                 TextButton(
-                    onClick = onOpenPermissions,
+                    onClick = {
+                        haptics.tick()
+                        onOpenPermissions()
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("检查通知、实时活动与精确闹钟权限")
@@ -1603,7 +1724,10 @@ private fun CourseReminderDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
+            TextButton(onClick = {
+                haptics.tick()
+                onDismiss()
+            }) { Text("关闭") }
         },
     )
 }

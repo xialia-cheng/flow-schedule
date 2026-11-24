@@ -540,6 +540,12 @@ class TimetableViewModel(
         }
     }
 
+    fun setHapticFeedbackEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setHapticFeedbackEnabled(enabled)
+        }
+    }
+
     // --- Import / Export / Share ---
     fun importCsvText(rawText: String, replaceExisting: Boolean) {
         viewModelScope.launch {

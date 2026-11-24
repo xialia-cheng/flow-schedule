@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.StudyTaskEntity
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowMotion
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
@@ -96,6 +97,7 @@ fun StudyScreen(
     val toastMessage by viewModel.toastMessage.collectAsStateWithLifecycle()
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     var showAddTaskDialog by remember { mutableStateOf(false) }
     var showCustomFocusDialog by remember { mutableStateOf(false) }
@@ -123,27 +125,35 @@ fun StudyScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
                         Text(
                             text = "学习专注",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = colorScheme.onBackground,
+                            maxLines = 1,
+                            softWrap = false,
                         )
                         Text(
                             text = "自定义专注/休息时长 · 支持实况通知与免打扰联动",
                             style = MaterialTheme.typography.bodySmall,
                             color = colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     Surface(
                         shape = CircleShape,
                         color = colorScheme.primaryContainer,
+                        modifier = Modifier.testTag("study_total_focus_pill"),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(5.dp),
                         ) {
@@ -158,6 +168,8 @@ fun StudyScreen(
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = colorScheme.onPrimaryContainer,
+                                maxLines = 1,
+                                softWrap = false,
                             )
                         }
                     }
@@ -185,15 +197,17 @@ fun StudyScreen(
                         .fillMaxWidth()
                         .padding(top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     val completedCount = state.tasks.count { it.isCompleted }
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "学习任务清单",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = colorScheme.onBackground,
+                            maxLines = 1,
+                            softWrap = false,
                         )
                         Text(
                             text = if (state.tasks.isEmpty()) {
@@ -203,11 +217,16 @@ fun StudyScreen(
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
 
                     FilledTonalButton(
-                        onClick = { showAddTaskDialog = true },
+                        onClick = {
+                            haptics.tick()
+                            showAddTaskDialog = true
+                        },
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
                             .testTag("study_add_task_button"),
@@ -218,7 +237,11 @@ fun StudyScreen(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("添加任务")
+                        Text(
+                            text = "添加任务",
+                            maxLines = 1,
+                            softWrap = false,
+                        )
                     }
                 }
             }
@@ -326,6 +349,7 @@ private fun PomodoroFocusCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val cardShape = MaterialTheme.shapes.large
 
     val animatedProgress by animateFloatAsState(
@@ -379,24 +403,42 @@ private fun PomodoroFocusCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     FilterChip(
                         selected = state.currentPhase == FocusPhase.FOCUS,
                         enabled = !state.isTimerRunning,
-                        onClick = { onSwitchPhase(FocusPhase.FOCUS) },
-                        label = { Text("专注 ${state.selectedPresetMinutes}分") },
+                        onClick = {
+                            haptics.tick()
+                            onSwitchPhase(FocusPhase.FOCUS)
+                        },
+                        label = {
+                            Text(
+                                text = "专注 ${state.selectedPresetMinutes}分",
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        },
                         shape = CircleShape,
                         modifier = Modifier.testTag("study_phase_focus_chip"),
                     )
                     FilterChip(
                         selected = state.currentPhase == FocusPhase.BREAK,
                         enabled = !state.isTimerRunning,
-                        onClick = { onSwitchPhase(FocusPhase.BREAK) },
+                        onClick = {
+                            haptics.tick()
+                            onSwitchPhase(FocusPhase.BREAK)
+                        },
                         label = {
                             Text(
-                                if (state.breakDurationMinutes > 0) "休息 ${state.breakDurationMinutes}分" else "不休息",
+                                text = if (state.breakDurationMinutes > 0) "休息 ${state.breakDurationMinutes}分" else "不休息",
+                                maxLines = 1,
+                                softWrap = false,
                             )
                         },
                         shape = CircleShape,
@@ -405,7 +447,10 @@ private fun PomodoroFocusCard(
                 }
 
                 Surface(
-                    onClick = onOpenCustomConfig,
+                    onClick = {
+                        haptics.tick()
+                        onOpenCustomConfig()
+                    },
                     shape = CircleShape,
                     color = colorScheme.secondaryContainer,
                     modifier = Modifier.testTag("study_custom_config_button"),
@@ -426,6 +471,8 @@ private fun PomodoroFocusCard(
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = colorScheme.onSecondaryContainer,
+                            maxLines = 1,
+                            softWrap = false,
                         )
                     }
                 }
@@ -441,7 +488,10 @@ private fun PomodoroFocusCard(
                     val selected = state.activeFocusLabel == subject
                     FilterChip(
                         selected = selected,
-                        onClick = { onSelectSubject(subject) },
+                        onClick = {
+                            haptics.tick()
+                            onSelectSubject(subject)
+                        },
                         label = {
                             Text(
                                 text = subject,
@@ -459,7 +509,10 @@ private fun PomodoroFocusCard(
                 item(key = "edit_focus_label") {
                     FilterChip(
                         selected = false,
-                        onClick = onOpenCustomConfig,
+                        onClick = {
+                            haptics.tick()
+                            onOpenCustomConfig()
+                        },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Rounded.Edit,
@@ -539,7 +592,10 @@ private fun PomodoroFocusCard(
                     FilterChip(
                         selected = !isBreakPhase && state.selectedPresetMinutes == preset,
                         enabled = !state.isTimerRunning,
-                        onClick = { onSelectPreset(preset) },
+                        onClick = {
+                            haptics.tick()
+                            onSelectPreset(preset)
+                        },
                         label = { Text("${preset}分") },
                         shape = CircleShape,
                         modifier = Modifier.testTag("study_preset_$preset"),
@@ -548,7 +604,10 @@ private fun PomodoroFocusCard(
                 FilterChip(
                     selected = !isBreakPhase && isCustomDuration,
                     enabled = !state.isTimerRunning,
-                    onClick = onOpenCustomConfig,
+                    onClick = {
+                        haptics.tick()
+                        onOpenCustomConfig()
+                    },
                     label = {
                         Text(if (isCustomDuration) "${state.selectedPresetMinutes}分(自定)" else "自定义时长")
                     },
@@ -564,7 +623,10 @@ private fun PomodoroFocusCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Button(
-                    onClick = onToggleTimer,
+                    onClick = {
+                        haptics.tick()
+                        onToggleTimer()
+                    },
                     modifier = Modifier
                         .height(48.dp)
                         .widthIn(min = 160.dp)
@@ -590,7 +652,10 @@ private fun PomodoroFocusCard(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 FilledTonalIconButton(
-                    onClick = onResetTimer,
+                    onClick = {
+                        haptics.tick()
+                        onResetTimer()
+                    },
                     modifier = Modifier
                         .size(48.dp)
                         .testTag("study_timer_reset_button"),
@@ -641,7 +706,10 @@ private fun PomodoroFocusCard(
                     }
                     Switch(
                         checked = state.linkFluidCloud,
-                        onCheckedChange = onToggleLinkFluidCloud,
+                        onCheckedChange = {
+                            haptics.tick()
+                            onToggleLinkFluidCloud(it)
+                        },
                         modifier = Modifier.testTag("study_switch_fluid_cloud"),
                     )
                 }
@@ -675,7 +743,10 @@ private fun PomodoroFocusCard(
                                 )
                                 if (state.linkDnd && !state.hasDndPolicyAccess) {
                                     Surface(
-                                        onClick = onOpenDndPolicySettings,
+                                        onClick = {
+                                            haptics.tick()
+                                            onOpenDndPolicySettings()
+                                        },
                                         shape = CircleShape,
                                         color = flowColors.upcomingAccent.copy(alpha = 0.16f),
                                         modifier = Modifier.testTag("study_dnd_grant_pill"),
@@ -699,7 +770,10 @@ private fun PomodoroFocusCard(
                     }
                     Switch(
                         checked = state.linkDnd,
-                        onCheckedChange = onToggleLinkDnd,
+                        onCheckedChange = {
+                            haptics.tick()
+                            onToggleLinkDnd(it)
+                        },
                         modifier = Modifier.testTag("study_switch_dnd"),
                     )
                 }
@@ -727,6 +801,7 @@ private fun CustomFocusConfigDialog(
     ) -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     var eventName by remember { mutableStateOf(initialEventName) }
     var focusText by remember { mutableStateOf(initialFocusMinutes.toString()) }
     var breakText by remember { mutableStateOf(initialBreakMinutes.toString()) }
@@ -778,6 +853,7 @@ private fun CustomFocusConfigDialog(
                     ) {
                         IconButton(
                             onClick = {
+                                haptics.tick()
                                 val next = ((parsedFocus ?: initialFocusMinutes) - 5).coerceAtLeast(1)
                                 focusText = next.toString()
                             },
@@ -801,6 +877,7 @@ private fun CustomFocusConfigDialog(
                         )
                         IconButton(
                             onClick = {
+                                haptics.tick()
                                 val next = ((parsedFocus ?: initialFocusMinutes) + 5).coerceAtMost(180)
                                 focusText = next.toString()
                             },
@@ -825,6 +902,7 @@ private fun CustomFocusConfigDialog(
                     ) {
                         IconButton(
                             onClick = {
+                                haptics.tick()
                                 val next = ((parsedBreak ?: initialBreakMinutes) - 1).coerceAtLeast(0)
                                 breakText = next.toString()
                             },
@@ -848,6 +926,7 @@ private fun CustomFocusConfigDialog(
                         )
                         IconButton(
                             onClick = {
+                                haptics.tick()
                                 val next = ((parsedBreak ?: initialBreakMinutes) + 1).coerceAtMost(60)
                                 breakText = next.toString()
                             },
@@ -881,7 +960,13 @@ private fun CustomFocusConfigDialog(
                             color = colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(checked = linkFluidCloud, onCheckedChange = { linkFluidCloud = it })
+                    Switch(
+                        checked = linkFluidCloud,
+                        onCheckedChange = {
+                            haptics.tick()
+                            linkFluidCloud = it
+                        },
+                    )
                 }
 
                 Row(
@@ -897,13 +982,20 @@ private fun CustomFocusConfigDialog(
                             color = colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(checked = linkDnd, onCheckedChange = { linkDnd = it })
+                    Switch(
+                        checked = linkDnd,
+                        onCheckedChange = {
+                            haptics.tick()
+                            linkDnd = it
+                        },
+                    )
                 }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
+                    haptics.confirm()
                     onConfirm(
                         parsedFocus ?: initialFocusMinutes,
                         parsedBreak ?: initialBreakMinutes,
@@ -919,7 +1011,10 @@ private fun CustomFocusConfigDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = {
+                haptics.tick()
+                onDismiss()
+            }) {
                 Text("取消")
             }
         },
@@ -935,12 +1030,16 @@ private fun StudyTaskRowCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onToggle)
+            .clickable {
+                haptics.confirm()
+                onToggle()
+            }
             .testTag("study_task_card_${task.id}"),
         shape = MaterialTheme.shapes.medium,
         color = flowColors.cardElevated,
@@ -953,7 +1052,10 @@ private fun StudyTaskRowCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(
-                onClick = onToggle,
+                onClick = {
+                    haptics.confirm()
+                    onToggle()
+                },
                 modifier = Modifier.minimumInteractiveComponentSize(),
             ) {
                 Icon(
@@ -1004,7 +1106,10 @@ private fun StudyTaskRowCard(
             }
 
             IconButton(
-                onClick = onDelete,
+                onClick = {
+                    haptics.tick()
+                    onDelete()
+                },
                 modifier = Modifier.minimumInteractiveComponentSize(),
             ) {
                 Icon(
@@ -1024,6 +1129,7 @@ private fun AddStudyTaskDialog(
     onDismiss: () -> Unit,
     onSave: (title: String, courseTag: String, targetMinutes: Int) -> Unit,
 ) {
+    val haptics = rememberAppHaptics()
     var title by remember { mutableStateOf("") }
     var selectedCourse by remember { mutableStateOf("") }
     var targetMinutes by remember { mutableIntStateOf(30) }
@@ -1061,6 +1167,7 @@ private fun AddStudyTaskDialog(
                                 FilterChip(
                                     selected = selectedCourse == name,
                                     onClick = {
+                                        haptics.tick()
                                         selectedCourse = if (selectedCourse == name) "" else name
                                     },
                                     label = { Text(name) },
@@ -1081,6 +1188,7 @@ private fun AddStudyTaskDialog(
                             FilterChip(
                                 selected = targetMinutes == mins,
                                 onClick = {
+                                    haptics.tick()
                                     targetMinutes = mins
                                     targetMinutesText = mins.toString()
                                 },
@@ -1109,6 +1217,7 @@ private fun AddStudyTaskDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    haptics.confirm()
                     val safeMins = (targetMinutesText.toIntOrNull() ?: targetMinutes).coerceIn(1, 360)
                     onSave(title.trim(), selectedCourse, safeMins)
                 },
@@ -1119,7 +1228,10 @@ private fun AddStudyTaskDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = {
+                haptics.tick()
+                onDismiss()
+            }) {
                 Text("取消")
             }
         },

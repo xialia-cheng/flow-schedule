@@ -66,6 +66,7 @@ fun CustomTagManagerDialog(
     onSelectTag: ((CustomScheduleTag) -> Unit)? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     var editingTagId by remember { mutableStateOf<String?>(null) }
     var nameInput by remember { mutableStateOf("") }
     var selectedHex by remember { mutableStateOf(CustomScheduleTagCodec.presetColorHexes.first()) }
@@ -139,6 +140,7 @@ fun CustomTagManagerDialog(
                                         shape = CircleShape,
                                     )
                                     .clickable {
+                                        haptics.tick()
                                         selectedHex = hex
                                         hexText = hex
                                         hexError = false
@@ -193,6 +195,7 @@ fun CustomTagManagerDialog(
                     if (editingTagId != null) {
                         OutlinedButton(
                             onClick = {
+                                haptics.tick()
                                 editingTagId = null
                                 nameInput = ""
                                 selectedHex = CustomScheduleTagCodec.presetColorHexes.first()
@@ -208,6 +211,7 @@ fun CustomTagManagerDialog(
                         onClick = {
                             val trimmed = nameInput.trim()
                             if (trimmed.isEmpty()) return@Button
+                            haptics.confirm()
                             val validHex = CourseColorPalette.parseHexColorOrNull(selectedHex)
                                 ?.let { CourseColorPalette.formatHex(it) }
                                 ?: CustomScheduleTagCodec.presetColorHexes.first()
@@ -265,6 +269,7 @@ fun CustomTagManagerDialog(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable(enabled = onSelectTag != null) {
+                                        haptics.tick()
                                         onSelectTag?.invoke(tag)
                                     }
                                     .testTag("custom_tag_row_${tag.id}"),
@@ -299,6 +304,7 @@ fun CustomTagManagerDialog(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         IconButton(
                                             onClick = {
+                                                haptics.tick()
                                                 editingTagId = tag.id
                                                 nameInput = tag.name
                                                 selectedHex = tag.colorHex
@@ -316,6 +322,7 @@ fun CustomTagManagerDialog(
                                         }
                                         IconButton(
                                             onClick = {
+                                                haptics.tick()
                                                 if (editingTagId == tag.id) {
                                                     editingTagId = null
                                                     nameInput = ""
@@ -340,7 +347,10 @@ fun CustomTagManagerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = {
+                haptics.tick()
+                onDismiss()
+            }) {
                 Text("完成", fontWeight = FontWeight.Bold)
             }
         },

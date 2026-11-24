@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.BackupRestoreMode
 import com.example.data.FullBackupPayload
 import com.example.data.TimetableImportExport
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 import kotlinx.coroutines.launch
@@ -95,6 +96,7 @@ fun TimetableImportSheet(
     val scope = rememberCoroutineScope()
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     var selectedMode by remember { mutableStateOf(ImportMode.CSV) }
     var textInput by remember { mutableStateOf("") }
@@ -187,6 +189,7 @@ fun TimetableImportSheet(
                     FilterChip(
                         selected = selected,
                         onClick = {
+                            haptics.tick()
                             selectedMode = mode
                             textInput = ""
                         },
@@ -221,7 +224,10 @@ fun TimetableImportSheet(
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilledTonalButton(
-                            onClick = { openFileLauncher.launch(arrayOf("text/*", "text/csv", "*/*")) },
+                            onClick = {
+                                haptics.tick()
+                                openFileLauncher.launch(arrayOf("text/*", "text/csv", "*/*"))
+                            },
                             shape = CircleShape,
                         ) {
                             Icon(Icons.Rounded.FileOpen, null, Modifier.size(16.dp))
@@ -229,7 +235,10 @@ fun TimetableImportSheet(
                             Text("选择文件")
                         }
                         OutlinedButton(
-                            onClick = { textInput = TimetableImportExport.SAMPLE_CSV_TEMPLATE },
+                            onClick = {
+                                haptics.tick()
+                                textInput = TimetableImportExport.SAMPLE_CSV_TEMPLATE
+                            },
                             shape = CircleShape,
                             modifier = Modifier.testTag("fill_sample_csv_button"),
                         ) {
@@ -261,12 +270,16 @@ fun TimetableImportSheet(
                         )
                         Switch(
                             checked = replaceExisting,
-                            onCheckedChange = { replaceExisting = it },
+                            onCheckedChange = {
+                                haptics.tick()
+                                replaceExisting = it
+                            },
                         )
                     }
                     Spacer(modifier = Modifier.height(14.dp))
                     Button(
                         onClick = {
+                            haptics.tick()
                             onImportCsv(textInput, replaceExisting)
                             onDismiss()
                         },
@@ -289,7 +302,10 @@ fun TimetableImportSheet(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     FilledTonalButton(
-                        onClick = { openFileLauncher.launch(arrayOf("text/html", "text/*", "*/*")) },
+                        onClick = {
+                            haptics.tick()
+                            openFileLauncher.launch(arrayOf("text/html", "text/*", "*/*"))
+                        },
                         shape = CircleShape,
                     ) {
                         Icon(Icons.Rounded.FileOpen, null, Modifier.size(16.dp))
@@ -315,11 +331,15 @@ fun TimetableImportSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text("覆盖当前课表已有课程", style = MaterialTheme.typography.bodyMedium)
-                        Switch(checked = replaceExisting, onCheckedChange = { replaceExisting = it })
+                        Switch(checked = replaceExisting, onCheckedChange = {
+                            haptics.tick()
+                            replaceExisting = it
+                        })
                     }
                     Spacer(modifier = Modifier.height(14.dp))
                     Button(
                         onClick = {
+                            haptics.tick()
                             onImportHtml(textInput, replaceExisting)
                             onDismiss()
                         },
@@ -343,6 +363,7 @@ fun TimetableImportSheet(
                     Spacer(modifier = Modifier.height(10.dp))
                     FilledTonalButton(
                         onClick = {
+                            haptics.tick()
                             val clip = readClipboardText(context)
                             if (clip.isNullOrBlank()) {
                                 onNotify("剪贴板为空")
@@ -375,11 +396,15 @@ fun TimetableImportSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text("导入为独立新课表", style = MaterialTheme.typography.bodyMedium)
-                        Switch(checked = createNewForCode, onCheckedChange = { createNewForCode = it })
+                        Switch(checked = createNewForCode, onCheckedChange = {
+                            haptics.tick()
+                            createNewForCode = it
+                        })
                     }
                     Spacer(modifier = Modifier.height(14.dp))
                     Button(
                         onClick = {
+                            haptics.tick()
                             onImportShareCode(textInput, createNewForCode)
                             onDismiss()
                         },
@@ -446,6 +471,7 @@ fun TimetableImportSheet(
                             ) {
                                 Button(
                                     onClick = {
+                                        haptics.tick()
                                         createBackupLauncher.launch("ripple_plan_backup.json")
                                     },
                                     modifier = Modifier
@@ -460,6 +486,7 @@ fun TimetableImportSheet(
                                 }
                                 FilledTonalButton(
                                     onClick = {
+                                        haptics.tick()
                                         openFileLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
                                     },
                                     modifier = Modifier
@@ -503,6 +530,7 @@ fun TimetableImportSheet(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(
                         onClick = {
+                            haptics.tick()
                             onRestoreBackupJson(rawJson, BackupRestoreMode.OVERWRITE_ALL)
                             pendingBackupPreview = null
                             onDismiss()
@@ -512,6 +540,7 @@ fun TimetableImportSheet(
                     }
                     Button(
                         onClick = {
+                            haptics.confirm()
                             onRestoreBackupJson(rawJson, BackupRestoreMode.SMART_MERGE)
                             pendingBackupPreview = null
                             onDismiss()
@@ -522,7 +551,10 @@ fun TimetableImportSheet(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingBackupPreview = null }) {
+                TextButton(onClick = {
+                    haptics.tick()
+                    pendingBackupPreview = null
+                }) {
                     Text("取消")
                 }
             },
@@ -544,6 +576,7 @@ fun TimetableShareSheet(
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -602,6 +635,7 @@ fun TimetableShareSheet(
             ) {
                 Button(
                     onClick = {
+                        haptics.tick()
                         copyTextToClipboard(context, "课表分享口令", shareCode)
                         onCopied("已复制课表分享口令")
                         onDismiss()
@@ -623,6 +657,7 @@ fun TimetableShareSheet(
 
                 FilledTonalButton(
                     onClick = {
+                        haptics.tick()
                         val sendIntent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_SUBJECT, timetableName)

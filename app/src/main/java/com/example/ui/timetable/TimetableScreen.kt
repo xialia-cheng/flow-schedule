@@ -101,13 +101,12 @@ import com.example.notification.LiveActivityItem
 import com.example.notification.LiveUpdatePermissionStatus
 import com.example.ui.components.FluidCloudCapsuleBanner
 import com.example.ui.components.SmartCaptureFab
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.components.rememberScrollAwareFabState
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 import kotlinx.coroutines.delay
-import android.view.HapticFeedbackConstants
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalView
 import java.util.Calendar
 
 @Composable
@@ -124,10 +123,7 @@ fun TimetableScreen(
     onTriggerFluidCloudTest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val view = LocalView.current
-    val tapHaptic: () -> Unit = {
-        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-    }
+    val haptics = rememberAppHaptics()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val toastMessage by viewModel.toastMessage.collectAsStateWithLifecycle()
 
@@ -264,6 +260,7 @@ fun TimetableScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Surface(
                         onClick = {
+                            haptics.tick()
                             editingCourse = null
                             editorInitialDay = state.selectedDayOfWeek.coerceIn(1, dayCount)
                             editorInitialSection = 1
@@ -329,7 +326,7 @@ fun TimetableScreen(
                 startTime = state.settings.extraBannerStartTime,
                 endTime = state.settings.extraBannerEndTime,
                 checkedToday = state.isMorningExerciseCheckedToday,
-                onToggleCheckIn = { tapHaptic(); viewModel.toggleMorningExerciseCheckIn() },
+                onToggleCheckIn = { haptics.confirm(); viewModel.toggleMorningExerciseCheckIn() },
             )
         }
 
@@ -554,6 +551,7 @@ fun TimetableScreen(
                                                                     .weight(1f)
                                                                     .fillMaxHeight()
                                                                     .clickable {
+                                                                        haptics.tick()
                                                                         editingCourse = null
                                                                         editorInitialDay = isoDay
                                                                         editorInitialSection = section
@@ -612,7 +610,7 @@ fun TimetableScreen(
                                                 isCurrentWeek = isCurrentWeekCourse,
                                                 compactMode = compactMode,
                                                 fontScale = fontScale,
-                                                onClick = { tapHaptic(); inspectingCourse = course },
+                                                onClick = { haptics.tick(); inspectingCourse = course },
                                                 modifier = Modifier
                                                     .offset(x = leftOffset, y = topOffset)
                                                     .width(colWidth)
@@ -854,10 +852,7 @@ private fun TimetableTopBar(
     onMoreClick: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val view = LocalView.current
-    val tapHaptic: () -> Unit = {
-        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-    }
+    val haptics = rememberAppHaptics()
     val isSelectedToday = DateTimeUtils.isSameDay(state.selectedDateMillis, nowMillis)
 
     Column(
@@ -875,7 +870,7 @@ private fun TimetableTopBar(
                 modifier = Modifier
                     .weight(1f)
                     .clip(MaterialTheme.shapes.small)
-                    .clickable { tapHaptic(); onTapWeekHeader() }
+                    .clickable { haptics.tick(); onTapWeekHeader() }
                     .padding(vertical = 2.dp, horizontal = 2.dp)
                     .testTag("timetable_week_header"),
                 verticalAlignment = Alignment.CenterVertically,
@@ -897,7 +892,7 @@ private fun TimetableTopBar(
                         modifier = Modifier
                             .clip(CircleShape)
                             .clickable {
-                                tapHaptic()
+                                haptics.tick()
                                 onJumpToday()
                             },
                     ) {
@@ -931,7 +926,7 @@ private fun TimetableTopBar(
             // Right: Import, Share, More
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
-                    onClick = { tapHaptic(); onImportClick() },
+                    onClick = { haptics.tick(); onImportClick() },
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
                         .testTag("timetable_import_button"),
@@ -943,7 +938,7 @@ private fun TimetableTopBar(
                     )
                 }
                 IconButton(
-                    onClick = { tapHaptic(); onShareClick() },
+                    onClick = { haptics.tick(); onShareClick() },
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
                         .testTag("timetable_share_button"),
@@ -955,7 +950,7 @@ private fun TimetableTopBar(
                     )
                 }
                 IconButton(
-                    onClick = { tapHaptic(); onMoreClick() },
+                    onClick = { haptics.tick(); onMoreClick() },
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
                         .testTag("timetable_more_button"),
@@ -999,7 +994,7 @@ private fun TimetableTopBar(
                         modifier = Modifier
                             .clip(CircleShape)
                             .clickable {
-                                tapHaptic()
+                                haptics.tick()
                                 onJumpToday()
                             }
                             .testTag("timetable_jump_today_pill"),
@@ -1031,7 +1026,7 @@ private fun TimetableTopBar(
                     ),
                     modifier = Modifier
                         .clip(CircleShape)
-                        .clickable { tapHaptic(); onToggleEditMode() }
+                        .clickable { haptics.tick(); onToggleEditMode() }
                         .testTag("timetable_edit_mode_toggle"),
                 ) {
                     Row(
@@ -1067,7 +1062,7 @@ private fun TimetableTopBar(
                     ),
                     modifier = Modifier
                         .clip(CircleShape)
-                        .clickable { tapHaptic(); onToggleViewMode() }
+                        .clickable { haptics.tick(); onToggleViewMode() }
                         .testTag("timetable_view_mode_toggle"),
                 ) {
                     Row(
@@ -1111,6 +1106,7 @@ private fun WeekdayDateStrip(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val animatedFraction by animateFloatAsState(
         targetValue = todayProgress.fraction,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
@@ -1141,7 +1137,10 @@ private fun WeekdayDateStrip(
                     .width(timeAxisWidth)
                     .defaultMinSize(minHeight = 48.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onClickTodayProgress)
+                    .clickable {
+                        haptics.tick()
+                        onClickTodayProgress()
+                    }
                     .padding(horizontal = 2.dp, vertical = 2.dp)
                     .testTag("timetable_today_progress_indicator"),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1238,7 +1237,10 @@ private fun WeekdayDateStrip(
                             .fillMaxWidth()
                             .defaultMinSize(minHeight = 48.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { onSelectDate(dateMillis) }
+                            .clickable {
+                                haptics.tick()
+                                onSelectDate(dateMillis)
+                            }
                             .testTag("timetable_weekday_${index + 1}"),
                     ) {
                         Column(
@@ -1782,6 +1784,7 @@ private fun TodayProgressDetailDialog(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1867,7 +1870,10 @@ private fun TodayProgressDetailDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = {
+                haptics.tick()
+                onDismiss()
+            }) {
                 Text("知道了")
             }
         },

@@ -70,6 +70,7 @@ import com.example.data.CourseEntity
 import com.example.data.DateTimeUtils
 import com.example.data.SectionTimeEntity
 import com.example.data.WeekType
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 
@@ -104,6 +105,7 @@ fun CourseEditorSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val safeMaxSection = maxSectionCount.coerceIn(6, 16)
     val safeTotalWeeks = totalWeeks.coerceIn(1, CourseEntity.MAX_TOTAL_WEEKS)
 
@@ -170,6 +172,7 @@ fun CourseEditorSheet(
                 if (editingCourse != null && onDelete != null) {
                     IconButton(
                         onClick = {
+                            haptics.tick()
                             onDelete(editingCourse)
                             onDismiss()
                         },
@@ -262,7 +265,10 @@ fun CourseEditorSheet(
                             .weight(1f)
                             .height(40.dp)
                             .clip(CircleShape)
-                            .clickable { dayOfWeek = day },
+                            .clickable {
+                                haptics.tick()
+                                dayOfWeek = day
+                            },
                         shape = CircleShape,
                         color = if (selected) colorScheme.primary else flowColors.cardElevated,
                         border = BorderStroke(
@@ -415,6 +421,7 @@ fun CourseEditorSheet(
                 FilterChip(
                     selected = selectedWeeks == allWeekSet,
                     onClick = {
+                        haptics.tick()
                         weekType = WeekType.ALL
                         startWeek = 1
                         endWeek = safeTotalWeeks
@@ -432,6 +439,7 @@ fun CourseEditorSheet(
                 FilterChip(
                     selected = selectedWeeks == oddWeekSet,
                     onClick = {
+                        haptics.tick()
                         weekType = WeekType.ODD
                         startWeek = 1
                         endWeek = if (safeTotalWeeks % 2 == 1) safeTotalWeeks else (safeTotalWeeks - 1).coerceAtLeast(1)
@@ -449,6 +457,7 @@ fun CourseEditorSheet(
                 FilterChip(
                     selected = selectedWeeks == evenWeekSet,
                     onClick = {
+                        haptics.tick()
                         weekType = WeekType.EVEN
                         startWeek = 2.coerceAtMost(safeTotalWeeks)
                         endWeek = if (safeTotalWeeks % 2 == 0) safeTotalWeeks else (safeTotalWeeks - 1).coerceAtLeast(1)
@@ -466,6 +475,7 @@ fun CourseEditorSheet(
                 FilterChip(
                     selected = selectedWeeks.isEmpty(),
                     onClick = {
+                        haptics.tick()
                         selectedWeeks = emptySet()
                     },
                     label = { Text("清空") },
@@ -507,6 +517,7 @@ fun CourseEditorSheet(
                                         .height(38.dp)
                                         .clip(MaterialTheme.shapes.small)
                                         .clickable {
+                                            haptics.tick()
                                             val updated = if (isPicked) {
                                                 selectedWeeks - weekNum
                                             } else {
@@ -616,7 +627,10 @@ fun CourseEditorSheet(
                 )
                 // Custom color entry bar at the end
                 Surface(
-                    onClick = { showCustomColorDialog = true },
+                    onClick = {
+                        haptics.tick()
+                        showCustomColorDialog = true
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("course_custom_color_button"),
@@ -732,6 +746,7 @@ fun CourseEditorSheet(
                         weekSelectionError = true
                         return@Button
                     }
+                    haptics.confirm()
                     val spec = CourseEntity.summarizeWeeks(selectedWeeks)
                     onSave(
                         editingCourse?.id ?: 0L,
@@ -798,6 +813,7 @@ private fun PresetColorRow(
     onSelect: (Int) -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     val totalCount = CourseColorPalette.styles.size
     val normalizedSelected = if (selectedColorIndex >= 0) {
         ((selectedColorIndex % totalCount) + totalCount) % totalCount
@@ -823,7 +839,10 @@ private fun PresetColorRow(
                         color = if (selected) colorScheme.onSurface else Color.Black.copy(alpha = 0.08f),
                         shape = CircleShape,
                     )
-                    .clickable { onSelect(idx) }
+                    .clickable {
+                        haptics.tick()
+                        onSelect(idx)
+                    }
                     .testTag("course_preset_color_$idx"),
                 contentAlignment = Alignment.Center,
             ) {
@@ -850,6 +869,7 @@ private fun CustomColorPickerDialog(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     val initHsv = remember(initialColor) {
         val out = FloatArray(3)
@@ -989,6 +1009,7 @@ private fun CustomColorPickerDialog(
                     Slider(
                         value = hue,
                         onValueChange = { syncSlidersToHex(it, saturation, brightness) },
+                        onValueChangeFinished = { haptics.tick() },
                         valueRange = 0f..360f,
                         colors = SliderDefaults.colors(
                             thumbColor = currentColor,
@@ -1014,6 +1035,7 @@ private fun CustomColorPickerDialog(
                     Slider(
                         value = saturation,
                         onValueChange = { syncSlidersToHex(hue, it, brightness) },
+                        onValueChangeFinished = { haptics.tick() },
                         valueRange = 0.1f..1f,
                         colors = SliderDefaults.colors(
                             thumbColor = currentColor,
@@ -1039,6 +1061,7 @@ private fun CustomColorPickerDialog(
                     Slider(
                         value = brightness,
                         onValueChange = { syncSlidersToHex(hue, saturation, it) },
+                        onValueChangeFinished = { haptics.tick() },
                         valueRange = 0.25f..0.95f,
                         colors = SliderDefaults.colors(
                             thumbColor = currentColor,
@@ -1051,6 +1074,7 @@ private fun CustomColorPickerDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    haptics.confirm()
                     val parsed = CourseColorPalette.parseHexColorOrNull(hexInput) ?: currentColor
                     onConfirm(CourseColorPalette.formatHex(parsed))
                 },
@@ -1060,7 +1084,10 @@ private fun CustomColorPickerDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = {
+                haptics.tick()
+                onDismiss()
+            }) {
                 Text("取消")
             }
         },
@@ -1077,6 +1104,7 @@ private fun NumericStepperCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     Surface(
         modifier = modifier,
@@ -1102,7 +1130,10 @@ private fun NumericStepperCard(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .clickable(onClick = onDecrement),
+                        .clickable {
+                            haptics.tick()
+                            onDecrement()
+                        },
                     shape = CircleShape,
                     color = colorScheme.surfaceContainerHigh,
                 ) {
@@ -1125,7 +1156,10 @@ private fun NumericStepperCard(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .clickable(onClick = onIncrement),
+                        .clickable {
+                            haptics.tick()
+                            onIncrement()
+                        },
                     shape = CircleShape,
                     color = colorScheme.surfaceContainerHigh,
                 ) {
@@ -1156,6 +1190,7 @@ fun CourseDetailDialog(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val style = course.resolvedColorStyle()
     val accent = if (flowColors.isDark) style.darkAccent else style.lightAccent
     val isInCurrentWeek = course.isInWeek(displayedWeek)
@@ -1240,7 +1275,10 @@ fun CourseDetailDialog(
                     )
                     otherSlotCourses.forEach { alt ->
                         Surface(
-                            onClick = { onSelectCourse(alt) },
+                            onClick = {
+                                haptics.tick()
+                                onSelectCourse(alt)
+                            },
                             shape = MaterialTheme.shapes.small,
                             color = colorScheme.surfaceContainerHigh,
                             modifier = Modifier.fillMaxWidth(),
@@ -1279,6 +1317,7 @@ fun CourseDetailDialog(
             if (canEdit) {
                 TextButton(
                     onClick = {
+                        haptics.tick()
                         onDismiss()
                         onEdit(course)
                     },
@@ -1294,7 +1333,10 @@ fun CourseDetailDialog(
                 }
             } else {
                 TextButton(
-                    onClick = onDismiss,
+                    onClick = {
+                        haptics.tick()
+                        onDismiss()
+                    },
                     modifier = Modifier.testTag("course_detail_close_button"),
                 ) {
                     Text("知道了", color = colorScheme.primary)
@@ -1305,6 +1347,7 @@ fun CourseDetailDialog(
             {
                 TextButton(
                     onClick = {
+                        haptics.tick()
                         onDismiss()
                         onDelete(course)
                     },

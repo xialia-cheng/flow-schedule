@@ -111,6 +111,7 @@ fun ScheduleEditorSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     val defaultStartMillis = remember(editingSchedule) {
         if (editingSchedule != null) {
@@ -203,6 +204,7 @@ fun ScheduleEditorSheet(
                 if (editingSchedule != null && onDelete != null) {
                     IconButton(
                         onClick = {
+                            haptics.tick()
                             onDelete(editingSchedule)
                             onDismiss()
                         },
@@ -217,6 +219,7 @@ fun ScheduleEditorSheet(
                 } else if (editingSchedule == null && onOpenSmartCapture != null) {
                     Surface(
                         onClick = {
+                            haptics.tick()
                             onDismiss()
                             onOpenSmartCapture()
                         },
@@ -298,6 +301,7 @@ fun ScheduleEditorSheet(
                         FilterChip(
                             selected = selected,
                             onClick = {
+                                haptics.tick()
                                 selectedCustomTagId = null
                                 category = cat
                             },
@@ -322,7 +326,10 @@ fun ScheduleEditorSheet(
                     val selected = selectedCustomTagId == tag.id
                     FilterChip(
                         selected = selected,
-                        onClick = { selectedCustomTagId = tag.id },
+                        onClick = {
+                            haptics.tick()
+                            selectedCustomTagId = tag.id
+                        },
                         leadingIcon = {
                             Box(
                                 modifier = Modifier
@@ -350,7 +357,10 @@ fun ScheduleEditorSheet(
 
                 FilterChip(
                     selected = false,
-                    onClick = { showTagManagerDialog = true },
+                    onClick = {
+                        haptics.tick()
+                        showTagManagerDialog = true
+                    },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Rounded.Add,
@@ -381,7 +391,10 @@ fun ScheduleEditorSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(MaterialTheme.shapes.medium)
-                    .clickable { showDatePicker = true }
+                    .clickable {
+                        haptics.tick()
+                        showDatePicker = true
+                    }
                     .testTag("editor_date_picker_button"),
                 shape = MaterialTheme.shapes.medium,
                 color = flowColors.cardElevated,
@@ -462,7 +475,10 @@ fun ScheduleEditorSheet(
                     val selected = repeatRule == rule
                     FilterChip(
                         selected = selected,
-                        onClick = { repeatRule = rule },
+                        onClick = {
+                            haptics.tick()
+                            repeatRule = rule
+                        },
                         label = { Text(rule.label) },
                         modifier = Modifier.testTag("repeat_chip_${rule.name.lowercase()}"),
                         colors = FilterChipDefaults.filterChipColors(
@@ -490,7 +506,10 @@ fun ScheduleEditorSheet(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     IconButton(
-                        onClick = { reminderMinutes = (reminderMinutes - 1).coerceAtLeast(0) },
+                        onClick = {
+                            haptics.tick()
+                            reminderMinutes = (reminderMinutes - 1).coerceAtLeast(0)
+                        },
                         enabled = reminderMinutes > 0,
                         modifier = Modifier.size(30.dp),
                     ) {
@@ -508,7 +527,10 @@ fun ScheduleEditorSheet(
                         color = colorScheme.primary,
                     )
                     IconButton(
-                        onClick = { reminderMinutes = (reminderMinutes + 1).coerceAtMost(120) },
+                        onClick = {
+                            haptics.tick()
+                            reminderMinutes = (reminderMinutes + 1).coerceAtMost(120)
+                        },
                         enabled = reminderMinutes < 120,
                         modifier = Modifier.size(30.dp),
                     ) {
@@ -529,7 +551,10 @@ fun ScheduleEditorSheet(
                     val selected = reminderMinutes == minutes
                     FilterChip(
                         selected = selected,
-                        onClick = { reminderMinutes = minutes },
+                        onClick = {
+                            haptics.tick()
+                            reminderMinutes = minutes
+                        },
                         label = { Text(label) },
                         modifier = Modifier.testTag("reminder_chip_$minutes"),
                         colors = FilterChipDefaults.filterChipColors(
@@ -568,6 +593,7 @@ fun ScheduleEditorSheet(
                         titleError = true
                         return@Button
                     }
+                    haptics.confirm()
                     val startMillis = DateTimeUtils.combineDateAndTime(dateMillis, startHour, startMinute)
                     var endMillis = DateTimeUtils.combineDateAndTime(dateMillis, endHour, endMinute)
                     if (endMillis <= startMillis) {
@@ -618,6 +644,7 @@ fun ScheduleEditorSheet(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        haptics.confirm()
                         datePickerState.selectedDateMillis?.let { selected ->
                             dateMillis = DateTimeUtils.startOfDayMillis(selected)
                         }
@@ -626,7 +653,10 @@ fun ScheduleEditorSheet(
                 ) { Text("确定") }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
+                TextButton(onClick = {
+                    haptics.tick()
+                    showDatePicker = false
+                }) { Text("取消") }
             },
         ) {
             DatePicker(state = datePickerState)
@@ -707,11 +737,15 @@ private fun TimeSelectorCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     Surface(
         modifier = modifier
             .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick),
+            .clickable {
+                haptics.tick()
+                onClick()
+            },
         shape = MaterialTheme.shapes.medium,
         color = flowColors.cardElevated,
         border = BorderStroke(1.dp, colorScheme.outlineVariant),
@@ -755,6 +789,7 @@ private fun TimePickerDialogWrapper(
     onConfirm: () -> Unit,
     content: @Composable () -> Unit,
 ) {
+    val haptics = rememberAppHaptics()
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -766,12 +801,18 @@ private fun TimePickerDialogWrapper(
         },
         text = { content() },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            TextButton(onClick = {
+                haptics.confirm()
+                onConfirm()
+            }) {
                 Text("确定", color = MaterialTheme.colorScheme.primary)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = {
+                haptics.tick()
+                onDismiss()
+            }) {
                 Text("取消")
             }
         },

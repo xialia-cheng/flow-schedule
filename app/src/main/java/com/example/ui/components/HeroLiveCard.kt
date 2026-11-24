@@ -73,6 +73,7 @@ fun HeroLiveCard(
 ) {
     val flowColors = FlowTheme.colors
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     val cardShape = MaterialTheme.shapes.large
 
     if (schedule == null) {
@@ -194,7 +195,10 @@ fun HeroLiveCard(
         modifier = elevatedModifier
             .testTag("hero_live_card")
             .clip(cardShape)
-            .clickable { onEdit(schedule) },
+            .clickable {
+                haptics.tick()
+                onEdit(schedule)
+            },
         shape = cardShape,
         color = flowColors.cardElevated,
         border = BorderStroke(
@@ -399,7 +403,10 @@ fun HeroLiveCard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Button(
-                    onClick = { onComplete(schedule) },
+                    onClick = {
+                        haptics.confirm()
+                        onComplete(schedule)
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)
@@ -424,7 +431,10 @@ fun HeroLiveCard(
                 }
 
                 FilledTonalButton(
-                    onClick = { onSnooze10Min(schedule) },
+                    onClick = {
+                        haptics.tick()
+                        onSnooze10Min(schedule)
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)

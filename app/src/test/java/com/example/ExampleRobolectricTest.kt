@@ -1310,6 +1310,47 @@ class ExampleRobolectricTest {
         fabState.expand()
         assertTrue(fabState.isVisible)
     }
+
+    @Test
+    fun `app haptics defaults enabled resolves standard tick and confirm constants and respects toggle`() {
+        val defaultSettings = com.example.data.AppSettings()
+        assertTrue(defaultSettings.hapticFeedbackEnabled)
+
+        assertEquals(
+            android.view.HapticFeedbackConstants.CLOCK_TICK,
+            com.example.ui.components.AppHaptics.resolveTickConstant(),
+        )
+        assertEquals(
+            android.view.HapticFeedbackConstants.CONFIRM,
+            com.example.ui.components.AppHaptics.resolveConfirmConstant(android.os.Build.VERSION_CODES.R),
+        )
+        assertEquals(
+            android.view.HapticFeedbackConstants.CONTEXT_CLICK,
+            com.example.ui.components.AppHaptics.resolveConfirmConstant(android.os.Build.VERSION_CODES.Q),
+        )
+
+        val enabledEvents = mutableListOf<Int>()
+        val enabledHaptics = com.example.ui.components.AppHaptics(enabled = true) { constant ->
+            enabledEvents.add(constant)
+        }
+        enabledHaptics.tick()
+        enabledHaptics.confirm()
+        assertEquals(
+            listOf(
+                com.example.ui.components.AppHaptics.resolveTickConstant(),
+                com.example.ui.components.AppHaptics.resolveConfirmConstant(),
+            ),
+            enabledEvents,
+        )
+
+        val disabledEvents = mutableListOf<Int>()
+        val disabledHaptics = com.example.ui.components.AppHaptics(enabled = false) { constant ->
+            disabledEvents.add(constant)
+        }
+        disabledHaptics.tick()
+        disabledHaptics.confirm()
+        assertTrue(disabledEvents.isEmpty())
+    }
 }
 
 

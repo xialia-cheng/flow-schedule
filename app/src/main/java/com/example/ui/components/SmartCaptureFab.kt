@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -35,7 +34,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
@@ -113,7 +111,7 @@ fun SmartCaptureFab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val colorScheme = MaterialTheme.colorScheme
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -175,7 +173,7 @@ fun SmartCaptureFab(
     ) {
         FloatingActionButton(
             onClick = {
-                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                haptics.tick()
                 onClick()
             },
             interactionSource = interactionSource,

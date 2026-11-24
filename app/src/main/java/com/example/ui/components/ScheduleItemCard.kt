@@ -150,12 +150,14 @@ fun ScheduleItemCard(
 ) {
     val flowColors = FlowTheme.colors
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     val tagLabel = schedule.resolvedTagLabel(customTags)
     val tagColor = schedule.resolvedTagColor(customTags)
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
+                haptics.tick()
                 onDelete(schedule)
                 true
             } else {
@@ -329,7 +331,10 @@ fun ScheduleItemCard(
             Surface(
                 modifier = cardModifier
                     .clip(cardShape)
-                    .clickable { onClick(schedule) },
+                    .clickable {
+                        haptics.tick()
+                        onClick(schedule)
+                    },
                 shape = cardShape,
                 color = if (schedule.isCompleted) {
                     colorScheme.surfaceContainerLow
@@ -486,7 +491,10 @@ fun ScheduleItemCard(
                                 .minimumInteractiveComponentSize()
                                 .clip(CircleShape)
                                 .semantics { contentDescription = toggleCd }
-                                .clickable(role = Role.Checkbox) { onToggleComplete(schedule) }
+                                .clickable(role = Role.Checkbox) {
+                                    haptics.confirm()
+                                    onToggleComplete(schedule)
+                                }
                                 .testTag("schedule_checkbox_${schedule.id}"),
                             contentAlignment = Alignment.Center,
                         ) {

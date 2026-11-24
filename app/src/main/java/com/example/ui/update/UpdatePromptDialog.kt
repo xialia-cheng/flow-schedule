@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.MonoFontFamily
 import com.example.update.ReleaseInfo
 
@@ -45,6 +46,7 @@ fun UpdateAvailableDialog(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val context = LocalContext.current
+    val haptics = rememberAppHaptics()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -141,6 +143,7 @@ fun UpdateAvailableDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    haptics.tick()
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.downloadUrl))
                     runCatching { context.startActivity(intent) }.onFailure {
                         onShowMessage("无法打开系统浏览器，请手动访问：${release.releasePageUrl}")
@@ -163,6 +166,7 @@ fun UpdateAvailableDialog(
                 if (release.downloadUrl != release.releasePageUrl) {
                     TextButton(
                         onClick = {
+                            haptics.tick()
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.releasePageUrl))
                             runCatching { context.startActivity(intent) }.onFailure {
                                 onShowMessage("无法打开浏览器，请访问：${release.releasePageUrl}")
@@ -174,7 +178,10 @@ fun UpdateAvailableDialog(
                     }
                 }
                 TextButton(
-                    onClick = onDismiss,
+                    onClick = {
+                        haptics.tick()
+                        onDismiss()
+                    },
                     modifier = Modifier.testTag("update_dialog_dismiss"),
                 ) {
                     Text("稍后再说")

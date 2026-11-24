@@ -102,6 +102,7 @@ import com.example.ui.components.ScheduleEditorSheet
 import com.example.ui.components.ScheduleItemCard
 import com.example.ui.components.ScheduleListSectionHeader
 import com.example.ui.components.SmartCaptureFab
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.components.rememberScrollAwareFabState
 import com.example.ui.theme.FlowMotion
 import com.example.ui.theme.FlowTheme
@@ -442,14 +443,18 @@ private fun TopHeaderRow(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val isSelectedToday = DateTimeUtils.isSameDay(selectedDateMillis, nowMillis)
 
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Text(
                 text = "日程",
                 style = MaterialTheme.typography.headlineSmall,
@@ -457,62 +462,64 @@ private fun TopHeaderRow(
                 color = colorScheme.onBackground,
                 maxLines = 1,
                 softWrap = false,
+                modifier = Modifier.weight(1f),
             )
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                AnimatedContent(
-                    targetState = selectedDateMillis,
-                    transitionSpec = {
-                        val movingForward = targetState >= initialState
-                        val enter = slideInHorizontally(
-                            animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
-                            initialOffsetX = { fullWidth -> if (movingForward) fullWidth / 3 else -fullWidth / 3 },
-                        ) + fadeIn(
-                            animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-                        )
-                        val exit = slideOutHorizontally(
-                            animationSpec = tween(durationMillis = 190, easing = FastOutSlowInEasing),
-                            targetOffsetX = { fullWidth -> if (movingForward) -fullWidth / 3 else fullWidth / 3 },
-                        ) + fadeOut(
-                            animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
-                        )
-                        (enter togetherWith exit).using(SizeTransform(clip = false))
-                    },
-                    label = "schedule_header_date_transition",
-                ) { targetDateMillis ->
-                    Text(
-                        text = DateTimeUtils.formatDateHeader(targetDateMillis),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        color = colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.testTag("schedule_selected_date_subtitle"),
-                    )
-                }
-                AnimatedVisibility(
-                    visible = !isSelectedToday,
-                    enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.88f, animationSpec = tween(180)),
-                    exit = fadeOut(tween(140)) + scaleOut(targetScale = 0.88f, animationSpec = tween(140)),
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = colorScheme.secondaryContainer,
+                if (!permissionsReady) {
+                    IconButton(
+                        onClick = {
+                            haptics.tick()
+                            onOpenPermissions()
+                        },
                         modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable(onClick = onJumpToday)
-                            .testTag("schedule_jump_today_pill"),
+                            .size(40.dp)
+                            .minimumInteractiveComponentSize()
+                            .testTag("permissions_status_button"),
                     ) {
+                        Icon(
+                            imageVector = Icons.Rounded.NotificationsOff,
+                            contentDescription = stringResource(R.string.cd_open_permissions),
+                            tint = flowColors.upcomingAccent,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+
+                // Primary "+ 新建日程" pill button placed cleanly in top bar right
+                Surface(
+                    onClick = {
+                        haptics.tick()
+                        onAddSchedule()
+                    },
+                    shape = CircleShape,
+                    color = colorScheme.primary,
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = 40.dp)
+                        .minimumInteractiveComponentSize()
+                        .testTag("add_schedule_button"),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.cd_add_schedule),
+                            tint = colorScheme.onPrimary,
+                            modifier = Modifier.size(17.dp),
+                        )
                         Text(
-                            text = "回今天",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colorScheme.onSecondaryContainer,
+                            text = stringResource(R.string.action_add_schedule),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = colorScheme.onPrimary,
                             maxLines = 1,
                             softWrap = false,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
                         )
                     }
                 }
@@ -520,54 +527,66 @@ private fun TopHeaderRow(
         }
 
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (!permissionsReady) {
-                IconButton(
-                    onClick = onOpenPermissions,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .minimumInteractiveComponentSize()
-                        .testTag("permissions_status_button"),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.NotificationsOff,
-                        contentDescription = stringResource(R.string.cd_open_permissions),
-                        tint = flowColors.upcomingAccent,
-                        modifier = Modifier.size(20.dp),
+            AnimatedContent(
+                targetState = selectedDateMillis,
+                modifier = Modifier.weight(1f, fill = false),
+                transitionSpec = {
+                    val movingForward = targetState >= initialState
+                    val enter = slideInHorizontally(
+                        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                        initialOffsetX = { fullWidth -> if (movingForward) fullWidth / 3 else -fullWidth / 3 },
+                    ) + fadeIn(
+                        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
                     )
-                }
+                    val exit = slideOutHorizontally(
+                        animationSpec = tween(durationMillis = 190, easing = FastOutSlowInEasing),
+                        targetOffsetX = { fullWidth -> if (movingForward) -fullWidth / 3 else fullWidth / 3 },
+                    ) + fadeOut(
+                        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
+                    )
+                    (enter togetherWith exit).using(SizeTransform(clip = false))
+                },
+                label = "schedule_header_date_transition",
+            ) { targetDateMillis ->
+                Text(
+                    text = DateTimeUtils.formatDateHeader(targetDateMillis),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("schedule_selected_date_subtitle"),
+                )
             }
-
-            // Primary "+ 新建日程" pill button placed cleanly in top bar right
-            Surface(
-                onClick = onAddSchedule,
-                shape = CircleShape,
-                color = colorScheme.primary,
-                modifier = Modifier
-                    .defaultMinSize(minHeight = 40.dp)
-                    .minimumInteractiveComponentSize()
-                    .testTag("add_schedule_button"),
+            AnimatedVisibility(
+                visible = !isSelectedToday,
+                enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.88f, animationSpec = tween(180)),
+                exit = fadeOut(tween(140)) + scaleOut(targetScale = 0.88f, animationSpec = tween(140)),
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                Surface(
+                    shape = CircleShape,
+                    color = colorScheme.secondaryContainer,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable {
+                            haptics.tick()
+                            onJumpToday()
+                        }
+                        .testTag("schedule_jump_today_pill"),
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = stringResource(R.string.cd_add_schedule),
-                        tint = colorScheme.onPrimary,
-                        modifier = Modifier.size(17.dp),
-                    )
                     Text(
-                        text = stringResource(R.string.action_add_schedule),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = colorScheme.onPrimary,
+                        text = "回今天",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.onSecondaryContainer,
                         maxLines = 1,
                         softWrap = false,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
                     )
                 }
             }
@@ -587,6 +606,7 @@ private fun ScheduleWeekdayDateStrip(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     Surface(
         modifier = Modifier
@@ -603,7 +623,10 @@ private fun ScheduleWeekdayDateStrip(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(
-                onClick = { onShiftWeek(-1) },
+                onClick = {
+                    haptics.tick()
+                    onShiftWeek(-1)
+                },
                 modifier = Modifier
                     .size(32.dp)
                     .testTag("schedule_prev_week_btn"),
@@ -714,7 +737,10 @@ private fun ScheduleWeekdayDateStrip(
                                     .fillMaxWidth()
                                     .defaultMinSize(minHeight = 48.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onSelectDate(dateMillis) }
+                                    .clickable {
+                                        haptics.tick()
+                                        onSelectDate(dateMillis)
+                                    }
                                     .testTag("schedule_weekday_${index + 1}"),
                             ) {
                                 Column(
@@ -753,7 +779,10 @@ private fun ScheduleWeekdayDateStrip(
             }
 
             IconButton(
-                onClick = { onShiftWeek(1) },
+                onClick = {
+                    haptics.tick()
+                    onShiftWeek(1)
+                },
                 modifier = Modifier
                     .size(32.dp)
                     .testTag("schedule_next_week_btn"),
@@ -930,6 +959,7 @@ private fun FilterChipsRow(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     Row(
         modifier = Modifier
@@ -950,7 +980,10 @@ private fun FilterChipsRow(
             val isSelected = filter == selected
             FilterChip(
                 selected = isSelected,
-                onClick = { onSelect(filter) },
+                onClick = {
+                    haptics.tick()
+                    onSelect(filter)
+                },
                 label = { Text(filter.label, maxLines = 1, softWrap = false) },
                 modifier = Modifier.testTag("filter_chip_${filter.name.lowercase()}"),
                 shape = CircleShape,
@@ -995,7 +1028,10 @@ private fun FilterChipsRow(
         }
         FilterChip(
             selected = false,
-            onClick = onManageTags,
+            onClick = {
+                haptics.tick()
+                onManageTags()
+            },
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Rounded.Label,

@@ -81,6 +81,7 @@ fun QuickSmartInputBar(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val pillShape = RoundedCornerShape(28.dp)
 
     val outerMod = if (!flowColors.isDark) {
@@ -153,7 +154,10 @@ fun QuickSmartInputBar(
                     ),
                     cursorBrush = SolidColor(colorScheme.primary),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { onSubmit() }),
+                    keyboardActions = KeyboardActions(onSend = {
+                        haptics.tick()
+                        onSubmit()
+                    }),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("quick_smart_input_field"),
@@ -161,7 +165,10 @@ fun QuickSmartInputBar(
             }
 
             IconButton(
-                onClick = onSubmit,
+                onClick = {
+                    haptics.tick()
+                    onSubmit()
+                },
                 enabled = !isParsing,
                 modifier = Modifier
                     .size(40.dp)
@@ -207,6 +214,7 @@ fun SmartQuickCaptureSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     val examples = listOf(
         "明天早八@教A-301高数 免打扰",
         "每周一三五10点在信工楼402上数据结构",
@@ -284,7 +292,10 @@ fun SmartQuickCaptureSheet(
                 maxLines = 4,
                 trailingIcon = if (value.isNotEmpty()) {
                     {
-                        IconButton(onClick = { onValueChange("") }) {
+                        IconButton(onClick = {
+                            haptics.tick()
+                            onValueChange("")
+                        }) {
                             Icon(
                                 imageVector = Icons.Rounded.Close,
                                 contentDescription = "清空输入",
@@ -295,7 +306,10 @@ fun SmartQuickCaptureSheet(
                     null
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { onSubmit() }),
+                keyboardActions = KeyboardActions(onSend = {
+                    haptics.tick()
+                    onSubmit()
+                }),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("quick_smart_input_field"),
@@ -314,7 +328,10 @@ fun SmartQuickCaptureSheet(
                 ) {
                     examples.forEach { sample ->
                         Surface(
-                            onClick = { onValueChange(sample) },
+                            onClick = {
+                                haptics.tick()
+                                onValueChange(sample)
+                            },
                             shape = CircleShape,
                             color = colorScheme.surfaceContainerHigh,
                             border = BorderStroke(1.dp, colorScheme.outlineVariant),
@@ -333,7 +350,10 @@ fun SmartQuickCaptureSheet(
             }
 
             Button(
-                onClick = onSubmit,
+                onClick = {
+                    haptics.tick()
+                    onSubmit()
+                },
                 enabled = !isParsing && value.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -379,6 +399,7 @@ fun SmartDraftPreviewSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val totalConflicts = drafts.sumOf { it.conflicts.size }
 
     ModalBottomSheet(
@@ -470,7 +491,10 @@ fun SmartDraftPreviewSheet(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 FilledTonalButton(
-                    onClick = onDismiss,
+                    onClick = {
+                        haptics.tick()
+                        onDismiss()
+                    },
                     modifier = Modifier
                         .weight(0.35f)
                         .height(50.dp),
@@ -480,7 +504,10 @@ fun SmartDraftPreviewSheet(
                 }
 
                 Button(
-                    onClick = onConfirm,
+                    onClick = {
+                        haptics.confirm()
+                        onConfirm()
+                    },
                     enabled = !isSaving && drafts.any { it.title.isNotBlank() },
                     modifier = Modifier
                         .weight(0.65f)
@@ -516,6 +543,7 @@ private fun AdjustableDraftCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     Surface(
         modifier = Modifier
@@ -587,7 +615,10 @@ private fun AdjustableDraftCard(
                     DraftType.entries.forEach { type ->
                         FilterChip(
                             selected = draft.draftType == type,
-                            onClick = { onUpdate(draft.copy(draftType = type)) },
+                            onClick = {
+                                haptics.tick()
+                                onUpdate(draft.copy(draftType = type))
+                            },
                             label = { Text(type.label) },
                             shape = CircleShape,
                         )
@@ -595,7 +626,10 @@ private fun AdjustableDraftCard(
                 }
                 if (canRemove) {
                     IconButton(
-                        onClick = onRemove,
+                        onClick = {
+                            haptics.tick()
+                            onRemove()
+                        },
                         modifier = Modifier.minimumInteractiveComponentSize(),
                     ) {
                         Icon(
@@ -646,6 +680,7 @@ private fun AdjustableDraftCard(
                         FilterChip(
                             selected = selected,
                             onClick = {
+                                haptics.tick()
                                 val nextDays = if (selected && activeDays.size > 1) {
                                     activeDays - isoDay
                                 } else if (!selected) {
@@ -677,6 +712,7 @@ private fun AdjustableDraftCard(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         FilledTonalButton(
                             onClick = {
+                                haptics.tick()
                                 val ns = (draft.startSection - 1).coerceAtLeast(1)
                                 val ne = (draft.endSection - 1).coerceAtLeast(ns)
                                 onUpdate(draft.copy(startSection = ns, endSection = ne))
@@ -686,6 +722,7 @@ private fun AdjustableDraftCard(
                         ) { Text("前移") }
                         FilledTonalButton(
                             onClick = {
+                                haptics.tick()
                                 val ne = (draft.endSection + 1).coerceAtMost(12)
                                 val ns = (draft.startSection + 1).coerceAtMost(ne)
                                 onUpdate(draft.copy(startSection = ns, endSection = ne))
@@ -725,6 +762,7 @@ private fun AdjustableDraftCard(
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             FilledTonalButton(
                                 onClick = {
+                                    haptics.tick()
                                     onUpdate(
                                         draft.copy(
                                             startTimeMillis = draft.startTimeMillis - 30 * 60_000L,
@@ -737,6 +775,7 @@ private fun AdjustableDraftCard(
                             ) { Text("-30分") }
                             FilledTonalButton(
                                 onClick = {
+                                    haptics.tick()
                                     onUpdate(
                                         draft.copy(
                                             startTimeMillis = draft.startTimeMillis + 30 * 60_000L,
@@ -759,7 +798,10 @@ private fun AdjustableDraftCard(
                     RepeatRule.entries.forEach { rule ->
                         FilterChip(
                             selected = draft.repeatRule == rule,
-                            onClick = { onUpdate(draft.copy(repeatRule = rule)) },
+                            onClick = {
+                                haptics.tick()
+                                onUpdate(draft.copy(repeatRule = rule))
+                            },
                             label = { Text(rule.label) },
                             shape = CircleShape,
                         )
@@ -775,7 +817,10 @@ private fun AdjustableDraftCard(
                 listOf(0 to "不提醒", 5 to "提前5分", 15 to "提前15分", 30 to "提前30分").forEach { (mins, lbl) ->
                     FilterChip(
                         selected = draft.reminderMinutesBefore == mins,
-                        onClick = { onUpdate(draft.copy(reminderMinutesBefore = mins)) },
+                        onClick = {
+                            haptics.tick()
+                            onUpdate(draft.copy(reminderMinutesBefore = mins))
+                        },
                         label = { Text(lbl) },
                         shape = CircleShape,
                     )
@@ -783,7 +828,10 @@ private fun AdjustableDraftCard(
 
                 FilterChip(
                     selected = draft.enableDnd,
-                    onClick = { onUpdate(draft.copy(enableDnd = !draft.enableDnd)) },
+                    onClick = {
+                        haptics.tick()
+                        onUpdate(draft.copy(enableDnd = !draft.enableDnd))
+                    },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Rounded.DoNotDisturbOn,

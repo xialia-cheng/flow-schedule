@@ -60,6 +60,7 @@ fun PermissionOnboardingSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -257,7 +258,10 @@ fun PermissionOnboardingSheet(
             Spacer(modifier = Modifier.height(18.dp))
 
             Button(
-                onClick = onDismiss,
+                onClick = {
+                    haptics.tick()
+                    onDismiss()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -341,8 +345,12 @@ private fun PermissionRowCard(
                 )
             }
 
+            val haptics = rememberAppHaptics()
             FilledTonalButton(
-                onClick = onAction,
+                onClick = {
+                    haptics.tick()
+                    onAction()
+                },
                 modifier = Modifier
                     .height(40.dp)
                     .testTag(buttonTag),

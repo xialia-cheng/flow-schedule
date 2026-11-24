@@ -82,6 +82,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -104,6 +105,8 @@ import com.example.data.WeekStartDay
 import com.example.notification.LiveUpdatePermissionStatus
 import com.example.smart.OpenAiCompatibleClient
 import com.example.ui.ScheduleViewModel
+import com.example.ui.components.AppHaptics
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.smart.SmartCaptureViewModel
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
@@ -133,6 +136,8 @@ fun MineScreen(
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
     val context = LocalContext.current
+    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val scope = rememberCoroutineScope()
 
     val exportBackupLauncher = rememberLauncherForActivityResult(
@@ -240,7 +245,10 @@ fun MineScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { debugExpanded = !debugExpanded }
+                                    .clickable {
+                                        haptics.tick()
+                                        debugExpanded = !debugExpanded
+                                    }
                                     .padding(horizontal = 16.dp, vertical = 14.dp)
                                     .testTag("mine_fluid_cloud_debug_toggle"),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -343,6 +351,7 @@ fun MineScreen(
                                     ) {
                                         IconButton(
                                             onClick = {
+                                                haptics.tick()
                                                 timetableViewModel.setCourseReminderLeadMinutes(
                                                     (settings.courseReminderLeadMinutes - 1).coerceAtLeast(0),
                                                 )
@@ -369,6 +378,7 @@ fun MineScreen(
                                         )
                                         IconButton(
                                             onClick = {
+                                                haptics.tick()
                                                 timetableViewModel.setCourseReminderLeadMinutes(
                                                     (settings.courseReminderLeadMinutes + 1).coerceAtMost(120),
                                                 )
@@ -430,7 +440,10 @@ fun MineScreen(
                                     )
                                 }
                                 Surface(
-                                    onClick = onOpenDndPolicySettings,
+                                    onClick = {
+                                        haptics.tick()
+                                        onOpenDndPolicySettings()
+                                    },
                                     shape = CircleShape,
                                     color = if (scheduleState.permissionStatus.hasDndPolicyAccess) {
                                         flowColors.completedAccent.copy(alpha = 0.14f)
@@ -629,6 +642,18 @@ fun MineScreen(
                                 testTag = "mine_switch_compact",
                             )
                             MineSwitchRow(
+                                title = "应用内触觉反馈",
+                                subtitle = "在切换标签、勾选完成与点击微调时提供清脆触感（尊重系统全局开关）",
+                                checked = settings.hapticFeedbackEnabled,
+                                onCheckedChange = { enabled ->
+                                    if (enabled && !settings.hapticFeedbackEnabled) {
+                                        view.performHapticFeedback(AppHaptics.resolveTickConstant())
+                                    }
+                                    timetableViewModel.setHapticFeedbackEnabled(enabled)
+                                },
+                                testTag = "mine_switch_haptic_feedback",
+                            )
+                            MineSwitchRow(
                                 title = if (settings.extraBannerTitle.isNotBlank()) {
                                     "顶部附加时段条（${settings.extraBannerTitle}）"
                                 } else {
@@ -729,6 +754,7 @@ fun MineScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
+                                        haptics.tick()
                                         exportBackupLauncher.launch("ripple_plan_timetable_backup.json")
                                     }
                                     .padding(horizontal = 16.dp, vertical = 14.dp)
@@ -774,6 +800,7 @@ fun MineScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
+                                        haptics.tick()
                                         importBackupLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
                                     }
                                     .padding(horizontal = 16.dp, vertical = 14.dp)
@@ -836,6 +863,7 @@ fun MineScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
+                                        haptics.tick()
                                         if (updateState.availableRelease != null && !updateState.isChecking) {
                                             appUpdateViewModel.openUpdateDialog()
                                         } else {
@@ -941,6 +969,7 @@ fun MineScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
+                                        haptics.tick()
                                         appUpdateViewModel.setAutoCheckUpdates(!updateState.autoCheckUpdates)
                                     }
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -974,7 +1003,10 @@ fun MineScreen(
                                 }
                                 Switch(
                                     checked = updateState.autoCheckUpdates,
-                                    onCheckedChange = { appUpdateViewModel.setAutoCheckUpdates(it) },
+                                    onCheckedChange = {
+                                        haptics.tick()
+                                        appUpdateViewModel.setAutoCheckUpdates(it)
+                                    },
                                     modifier = Modifier.testTag("mine_auto_check_updates_switch"),
                                 )
                             }
@@ -988,7 +1020,10 @@ fun MineScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { showAboutSheet = true }
+                                    .clickable {
+                                        haptics.tick()
+                                        showAboutSheet = true
+                                    }
                                     .padding(horizontal = 16.dp, vertical = 14.dp)
                                     .testTag("mine_about_help_entry"),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -1076,6 +1111,7 @@ fun MineScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        haptics.confirm()
                         timetableViewModel.restoreFullBackupJson(rawJson, BackupRestoreMode.SMART_MERGE)
                         pendingBackupPreview = null
                     },
@@ -1087,13 +1123,17 @@ fun MineScreen(
             dismissButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(
-                        onClick = { pendingBackupPreview = null },
+                        onClick = {
+                            haptics.tick()
+                            pendingBackupPreview = null
+                        },
                         modifier = Modifier.testTag("mine_backup_restore_cancel"),
                     ) {
                         Text("取消")
                     }
                     TextButton(
                         onClick = {
+                            haptics.tick()
                             timetableViewModel.restoreFullBackupJson(rawJson, BackupRestoreMode.OVERWRITE_ALL)
                             pendingBackupPreview = null
                         },
@@ -1247,13 +1287,17 @@ private fun FluidCloudTestCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val shape = MaterialTheme.shapes.large
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .clickable(onClick = onTriggerTest)
+            .clickable {
+                haptics.tick()
+                onTriggerTest()
+            }
             .testTag("mine_test_fluid_cloud_button"),
         shape = shape,
         color = flowColors.cardElevated,
@@ -1343,6 +1387,7 @@ private fun FluidCloudPermissionCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val ready = status.allRecommendedGranted
     val badgeColor = if (ready) flowColors.completedAccent else flowColors.upcomingAccent
 
@@ -1350,7 +1395,10 @@ private fun FluidCloudPermissionCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
-            .clickable(onClick = onOpenPermissions)
+            .clickable {
+                haptics.tick()
+                onOpenPermissions()
+            }
             .testTag("mine_permissions_button"),
         shape = MaterialTheme.shapes.large,
         color = flowColors.cardElevated,
@@ -1415,6 +1463,7 @@ private fun MineSwitchRow(
     testTag: String,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1436,7 +1485,10 @@ private fun MineSwitchRow(
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = {
+                haptics.tick()
+                onCheckedChange(it)
+            },
             modifier = Modifier.testTag(testTag),
         )
     }
@@ -1453,6 +1505,7 @@ private fun CustomAiSettingsCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     var enabled by remember { mutableStateOf(savedConfig.enabled) }
     var baseUrl by remember { mutableStateOf(savedConfig.baseUrl) }
@@ -1519,7 +1572,10 @@ private fun CustomAiSettingsCard(
                 }
                 Switch(
                     checked = enabled,
-                    onCheckedChange = { enabled = it },
+                    onCheckedChange = {
+                        haptics.tick()
+                        enabled = it
+                    },
                     modifier = Modifier.testTag("ai_enable_switch"),
                 )
             }
@@ -1676,7 +1732,10 @@ private fun CustomAiSettingsCard(
                 singleLine = true,
                 visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
-                    IconButton(onClick = { showApiKey = !showApiKey }) {
+                    IconButton(onClick = {
+                        haptics.tick()
+                        showApiKey = !showApiKey
+                    }) {
                         Icon(
                             imageVector = if (showApiKey) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
                             contentDescription = if (showApiKey) "隐藏密钥" else "显示密钥",
@@ -1723,7 +1782,10 @@ private fun CustomAiSettingsCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(
-                    onClick = { onSave(enabled, baseUrl, apiKey, model) },
+                    onClick = {
+                        haptics.confirm()
+                        onSave(enabled, baseUrl, apiKey, model)
+                    },
                     enabled = isUrlValidHttps,
                     modifier = Modifier
                         .weight(1f)
@@ -1741,7 +1803,10 @@ private fun CustomAiSettingsCard(
                 }
 
                 FilledTonalButton(
-                    onClick = { onTestConnection(baseUrl, apiKey, model) },
+                    onClick = {
+                        haptics.tick()
+                        onTestConnection(baseUrl, apiKey, model)
+                    },
                     enabled = !isTesting &&
                         OpenAiCompatibleClient.isValidHttpsUrl(baseUrl) &&
                         apiKey.isNotBlank() &&
@@ -1774,6 +1839,7 @@ private fun CustomAiSettingsCard(
             if (savedConfig.baseUrl.isNotBlank() || savedConfig.apiKey.isNotBlank() || savedConfig.model.isNotBlank()) {
                 OutlinedButton(
                     onClick = {
+                        haptics.tick()
                         enabled = false
                         baseUrl = ""
                         apiKey = ""
@@ -1809,6 +1875,7 @@ private fun SelectablePillOption(
     contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     val containerColor = if (selected) {
         colorScheme.primaryContainer
     } else {
@@ -1826,7 +1893,10 @@ private fun SelectablePillOption(
     }
 
     Surface(
-        onClick = onClick,
+        onClick = {
+            haptics.tick()
+            onClick()
+        },
         modifier = modifier.height(38.dp),
         shape = CircleShape,
         color = containerColor,

@@ -84,6 +84,7 @@ import com.example.data.BellBatchConfig
 import com.example.data.BellScheduleGenerator
 import com.example.data.CourseColorPalette
 import com.example.data.SectionTimeEntity
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -116,6 +117,7 @@ fun SectionTimesEditorSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     val timetableId = remember(initialTimes) { initialTimes.firstOrNull()?.timetableId ?: 0L }
     var editableTimes by remember(initialTimes) {
@@ -212,7 +214,10 @@ fun SectionTimesEditorSheet(
                     modifier = Modifier.weight(1f),
                 ) {
                     IconButton(
-                        onClick = onDismiss,
+                        onClick = {
+                            haptics.tick()
+                            onDismiss()
+                        },
                         modifier = Modifier
                             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                             .testTag("section_times_close_button"),
@@ -243,7 +248,10 @@ fun SectionTimesEditorSheet(
                 }
 
                 Button(
-                    onClick = { onSave(editableTimes) },
+                    onClick = {
+                        haptics.confirm()
+                        onSave(editableTimes)
+                    },
                     enabled = canSave,
                     shape = CircleShape,
                     contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
@@ -534,6 +542,7 @@ private fun SectionCountStepperCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -580,7 +589,10 @@ private fun SectionCountStepperCard(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .clickable(enabled = canDec, onClick = onDecrease)
+                            .clickable(enabled = canDec) {
+                                haptics.tick()
+                                onDecrease()
+                            }
                             .testTag("section_count_decrease"),
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -617,7 +629,10 @@ private fun SectionCountStepperCard(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .clickable(enabled = canInc, onClick = onIncrease)
+                            .clickable(enabled = canInc) {
+                                haptics.tick()
+                                onIncrease()
+                            }
                             .testTag("section_count_increase"),
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -690,6 +705,7 @@ private fun BatchGeneratorCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val eveningCount = (totalSections - morningCount - afternoonCount).coerceAtLeast(0)
 
     Surface(
@@ -703,7 +719,10 @@ private fun BatchGeneratorCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 52.dp)
-                    .clickable(onClick = onToggleExpanded)
+                    .clickable {
+                        haptics.tick()
+                        onToggleExpanded()
+                    }
                     .padding(horizontal = 16.dp, vertical = 12.dp)
                     .testTag("batch_generator_toggle"),
                 verticalAlignment = Alignment.CenterVertically,
@@ -915,7 +934,10 @@ private fun BatchGeneratorCard(
                     }
 
                     FilledTonalButton(
-                        onClick = onApplyBatch,
+                        onClick = {
+                            haptics.tick()
+                            onApplyBatch()
+                        },
                         shape = MaterialTheme.shapes.medium,
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = colorScheme.primary,
@@ -966,6 +988,7 @@ private fun PeriodCountChip(
     modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = colorScheme.surface.copy(alpha = 0.85f),
@@ -996,7 +1019,10 @@ private fun PeriodCountChip(
                         .size(28.dp)
                         .clip(CircleShape)
                         .background(colorScheme.surfaceContainerHigh)
-                        .clickable(enabled = canDecrease, onClick = onDecrease),
+                        .clickable(enabled = canDecrease) {
+                            haptics.tick()
+                            onDecrease()
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -1019,7 +1045,10 @@ private fun PeriodCountChip(
                         .size(28.dp)
                         .clip(CircleShape)
                         .background(colorScheme.surfaceContainerHigh)
-                        .clickable(enabled = canIncrease, onClick = onIncrease),
+                        .clickable(enabled = canIncrease) {
+                            haptics.tick()
+                            onIncrease()
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -1042,6 +1071,7 @@ private fun PeriodStartTimeButton(
     modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = if (enabled) colorScheme.surface else colorScheme.surfaceContainerLow,
@@ -1052,7 +1082,10 @@ private fun PeriodStartTimeButton(
         modifier = modifier
             .defaultMinSize(minHeight = 52.dp)
             .clip(MaterialTheme.shapes.medium)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled) {
+                haptics.tick()
+                onClick()
+            }
             .alpha(if (enabled) 1f else 0.5f),
     ) {
         Column(
@@ -1266,6 +1299,7 @@ private fun EditableTimeChip(
     modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = if (isError) colorScheme.errorContainer else colorScheme.surfaceContainerHigh,
@@ -1276,7 +1310,10 @@ private fun EditableTimeChip(
         modifier = modifier
             .defaultMinSize(minWidth = 76.dp, minHeight = 44.dp)
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .clickable {
+                haptics.tick()
+                onClick()
+            },
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
@@ -1312,6 +1349,7 @@ fun CompactWheelTimePickerDialog(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
 
     var selectedHour by remember(initialHour) { mutableIntStateOf(initialHour.coerceIn(0, 23)) }
     var selectedMinute by remember(initialMinute) { mutableIntStateOf(initialMinute.coerceIn(0, 59)) }
@@ -1378,6 +1416,7 @@ fun CompactWheelTimePickerDialog(
                     }
                     IconButton(
                         onClick = {
+                            haptics.tick()
                             if (!useKeyboardMode) {
                                 hourText = String.format("%02d", selectedHour)
                                 minuteText = String.format("%02d", selectedMinute)
@@ -1537,7 +1576,10 @@ fun CompactWheelTimePickerDialog(
                 ) {
                     listOf(-10 to "-10分", -5 to "-5分", 5 to "+5分", 10 to "+10分").forEach { (delta, label) ->
                         OutlinedButton(
-                            onClick = { applyTotalMinutes(currentTotal + delta) },
+                            onClick = {
+                                haptics.tick()
+                                applyTotalMinutes(currentTotal + delta)
+                            },
                             shape = CircleShape,
                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
                             modifier = Modifier
@@ -1570,14 +1612,20 @@ fun CompactWheelTimePickerDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     TextButton(
-                        onClick = onDismiss,
+                        onClick = {
+                            haptics.tick()
+                            onDismiss()
+                        },
                         modifier = Modifier.defaultMinSize(minHeight = 48.dp),
                     ) {
                         Text("取消")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = { onConfirm(selectedHour, selectedMinute) },
+                        onClick = {
+                            haptics.confirm()
+                            onConfirm(selectedHour, selectedMinute)
+                        },
                         enabled = isValid,
                         shape = CircleShape,
                         contentPadding = PaddingValues(horizontal = 22.dp, vertical = 10.dp),
@@ -1601,6 +1649,7 @@ private fun NumericWheelPicker(
     modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     val values = remember(range) { range.toList() }
     val itemHeight = 40.dp
     val visibleCount = 3
@@ -1642,6 +1691,7 @@ private fun NumericWheelPicker(
                 if (centeredIdx == null) return@collect
                 val value = values[centeredIdx]
                 if (value != latestSelectedValue) {
+                    haptics.tick()
                     onValueSelected(value)
                 }
             }
@@ -1678,6 +1728,7 @@ private fun NumericWheelPicker(
                         .height(itemHeight)
                         .clip(RoundedCornerShape(10.dp))
                         .clickable {
+                            haptics.tick()
                             onValueSelected(value)
                             coroutineScope.launch {
                                 listState.animateScrollToItem(index)

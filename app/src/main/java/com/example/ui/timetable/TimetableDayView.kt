@@ -68,6 +68,7 @@ import com.example.data.CourseEntity
 import com.example.data.DateTimeUtils
 import com.example.data.ScheduleEntity
 import com.example.data.SectionTimeEntity
+import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 
@@ -90,6 +91,7 @@ internal fun TimetableDayTimelineView(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val density = LocalDensity.current
     val swipeThresholdPx = remember(density) { with(density) { 64.dp.toPx() } }
 
@@ -179,7 +181,10 @@ internal fun TimetableDayTimelineView(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 IconButton(
-                                    onClick = { onShiftDay(-1) },
+                                    onClick = {
+                                        haptics.tick()
+                                        onShiftDay(-1)
+                                    },
                                     modifier = Modifier
                                         .minimumInteractiveComponentSize()
                                         .testTag("day_view_prev_day"),
@@ -230,7 +235,10 @@ internal fun TimetableDayTimelineView(
                                 }
 
                                 IconButton(
-                                    onClick = { onShiftDay(1) },
+                                    onClick = {
+                                        haptics.tick()
+                                        onShiftDay(1)
+                                    },
                                     modifier = Modifier
                                         .minimumInteractiveComponentSize()
                                         .testTag("day_view_next_day"),
@@ -372,7 +380,10 @@ internal fun TimetableDayTimelineView(
                                 if (isEditMode) {
                                     Spacer(modifier = Modifier.height(4.dp))
                                     FilledTonalButton(
-                                        onClick = { onAddCourseForDay(selectedIsoDay) },
+                                        onClick = {
+                                            haptics.tick()
+                                            onAddCourseForDay(selectedIsoDay)
+                                        },
                                         shape = CircleShape,
                                         modifier = Modifier.testTag("day_view_add_course_button"),
                                     ) {
@@ -446,6 +457,7 @@ private fun DayCourseTimelineCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val style = course.resolvedColorStyle()
 
     val accentColor = if (isCurrentWeek) {
@@ -470,7 +482,10 @@ private fun DayCourseTimelineCard(
             .fillMaxWidth()
             .alpha(if (isCurrentWeek) 1f else 0.68f)
             .clip(shape)
-            .clickable(onClick = onClick)
+            .clickable {
+                haptics.tick()
+                onClick()
+            }
             .testTag("day_course_card_${course.id}"),
         shape = shape,
         color = cardBg,
@@ -652,6 +667,7 @@ private fun DayAssociatedScheduleCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val flowColors = FlowTheme.colors
+    val haptics = rememberAppHaptics()
     val isInProgress = !schedule.isCompleted && schedule.isInProgress(nowMillis)
     val shape = RoundedCornerShape(18.dp)
 
@@ -659,7 +675,10 @@ private fun DayAssociatedScheduleCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .clickable(onClick = onEdit)
+            .clickable {
+                haptics.tick()
+                onEdit()
+            }
             .testTag("day_schedule_card_${schedule.id}"),
         shape = shape,
         color = flowColors.cardElevated,
@@ -676,7 +695,10 @@ private fun DayAssociatedScheduleCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             IconButton(
-                onClick = onToggleComplete,
+                onClick = {
+                    haptics.confirm()
+                    onToggleComplete()
+                },
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .testTag("day_schedule_toggle_${schedule.id}"),
