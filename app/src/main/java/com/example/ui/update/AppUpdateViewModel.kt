@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.BuildConfig
+import com.example.data.UpdateMirrorSource
 import com.example.data.UserPreferencesRepository
 import com.example.update.AppUpdateChecker
 import com.example.update.ReleaseInfo
@@ -19,6 +20,7 @@ data class AppUpdateUiState(
     val isChecking: Boolean = false,
     val autoCheckUpdates: Boolean = true,
     val lastCheckMillis: Long = 0L,
+    val selectedMirrorSource: UpdateMirrorSource = UpdateMirrorSource.OFFICIAL_DIRECT,
     val availableRelease: ReleaseInfo? = null,
     val showUpdateDialog: Boolean = false,
     val lastStatusHint: String? = null,
@@ -40,6 +42,7 @@ class AppUpdateViewModel(
                     state.copy(
                         autoCheckUpdates = settings.autoCheckUpdates,
                         lastCheckMillis = settings.lastUpdateCheckMillis,
+                        selectedMirrorSource = settings.updateMirrorSource,
                     )
                 }
             }
@@ -70,6 +73,12 @@ class AppUpdateViewModel(
     fun setAutoCheckUpdates(enabled: Boolean) {
         viewModelScope.launch {
             preferencesRepository.setAutoCheckUpdates(enabled)
+        }
+    }
+
+    fun setUpdateMirrorSource(source: UpdateMirrorSource) {
+        viewModelScope.launch {
+            preferencesRepository.setUpdateMirrorSource(source)
         }
     }
 

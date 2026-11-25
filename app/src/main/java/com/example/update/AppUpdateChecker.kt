@@ -1,7 +1,15 @@
 package com.example.update
 
 import com.example.BuildConfig
+import com.example.data.UpdateMirrorSource
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
@@ -30,10 +38,23 @@ object AppUpdateChecker {
     const val RELEASES_PAGE_URL = "$REPO_URL/releases"
     const val LATEST_RELEASE_API_URL =
         "https://api.github.com/repos/xialia-cheng/ripple-plan/releases/latest"
+    const val MIRROR_RELEASE_API_URL =
+        "https://ghproxy.net/https://api.github.com/repos/xialia-cheng/ripple-plan/releases/latest"
     const val AUTO_CHECK_INTERVAL_MILLIS = 24L * 60L * 60L * 1000L
 
-    private const val CONNECT_TIMEOUT_MS = 8_000
-    private const val READ_TIMEOUT_MS = 8_000
+    internal const val CONNECT_TIMEOUT_MS = 3_000
+    internal const val READ_TIMEOUT_MS = 3_000
+
+    fun resolveDownloadUrl(
+        release: ReleaseInfo,
+        mirrorSource: UpdateMirrorSource,
+    ): String {
+        return if (release.hasApkAsset) {
+            mirrorSource.resolveDownloadUrl(release.downloadUrl)
+        } else {
+            release.releasePageUrl
+        }
+    }
 
     /**
      * Normalizes a version string or GitHub tag such as "v2.1.2", "V2.2.0-beta.1"
@@ -134,10 +155,62 @@ object AppUpdateChecker {
 
     suspend fun fetchLatestRelease(
         currentVersion: String = BuildConfig.VERSION_NAME,
+    ): UpdateCheckResult = raceLatestRelease(currentVersion = currentVersion)
+
+    internal suspend fun raceLatestRelease(
+        currentVersion: String = BuildConfig.VERSION_NAME,
+        endpoints: List<String> = listOf(LATEST_RELEASE_API_URL, MIRROR_RELEASE_API_URL),
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+        fetcher: suspend (endpointUrl: String, currentVersion: String) -> UpdateCheckResult = ::fetchSingleEndpoint,
+    ): UpdateCheckResult = coroutineScope {
+        if (endpoints.isEmpty()) {
+            return@coroutineScope UpdateCheckResult.Error("未配置更新检查地址，不影响本地正常使用")
+        }
+        val resultsChannel = Channel<UpdateCheckResult>(capacity = endpoints.size)
+        val jobs = endpoints.map { endpoint ->
+            launch(ioDispatcher) {
+                val outcome = try {
+                    fetcher(endpoint, currentVersion)
+                } catch (ce: CancellationException) {
+                    throw ce
+                } catch (_: Exception) {
+                    UpdateCheckResult.Error("检查更新失败，不影响本地正常使用")
+                }
+                resultsChannel.trySend(outcome)
+            }
+        }
+
+        var lastError: UpdateCheckResult.Error? = null
+        try {
+            repeat(endpoints.size) {
+                val candidate = resultsChannel.receive()
+                if (candidate is UpdateCheckResult.UpdateAvailable || candidate is UpdateCheckResult.UpToDate) {
+                    jobs.forEach { it.cancel() }
+                    return@coroutineScope candidate
+                }
+                if (candidate is UpdateCheckResult.Error) {
+                    lastError = candidate
+                }
+            }
+            lastError ?: UpdateCheckResult.Error("双路检查更新均失败或超时，请稍后重试")
+        } finally {
+            jobs.forEach { it.cancel() }
+            resultsChannel.close()
+        }
+    }
+
+    private suspend fun fetchSingleEndpoint(
+        endpointUrl: String,
+        currentVersion: String,
     ): UpdateCheckResult = withContext(Dispatchers.IO) {
         var connection: HttpURLConnection? = null
+        val cancelHook = coroutineContext[Job]?.invokeOnCompletion { cause ->
+            if (cause != null) {
+                runCatching { connection?.disconnect() }
+            }
+        }
         try {
-            val url = URL(LATEST_RELEASE_API_URL)
+            val url = URL(endpointUrl)
             connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = CONNECT_TIMEOUT_MS
@@ -147,29 +220,38 @@ object AppUpdateChecker {
                 setRequestProperty("User-Agent", "RipplePlan-Android/$currentVersion")
             }
 
+            ensureActive()
             val code = connection.responseCode
-            val body = runCatching {
-                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-                stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            }.getOrDefault("")
-
-            when {
-                code in 200..299 -> parseLatestReleaseJson(body, currentVersion)
-                code == 404 -> UpdateCheckResult.Error("仓库暂无公开发布版本，请稍后再试")
-                code == 403 || code == 429 ->
-                    UpdateCheckResult.Error("GitHub 接口请求过于频繁，请稍后再试")
-                else -> UpdateCheckResult.Error("检查更新失败（HTTP $code），不影响本地正常使用")
+            if (code == HttpURLConnection.HTTP_OK) {
+                val body = connection.inputStream
+                    ?.bufferedReader(Charsets.UTF_8)
+                    ?.use { it.readText() }
+                    .orEmpty()
+                ensureActive()
+                parseLatestReleaseJson(body, currentVersion)
+            } else {
+                runCatching { connection.errorStream?.close() }
+                when {
+                    code == 404 -> UpdateCheckResult.Error("仓库暂无公开发布版本，请稍后再试")
+                    code == 403 || code == 429 ->
+                        UpdateCheckResult.Error("GitHub 接口请求过于频繁，请稍后再试")
+                    else -> UpdateCheckResult.Error("检查更新失败（HTTP $code），不影响本地正常使用")
+                }
             }
+        } catch (ce: CancellationException) {
+            runCatching { connection?.disconnect() }
+            throw ce
         } catch (_: SocketTimeoutException) {
-            UpdateCheckResult.Error("连接 GitHub 超时，请检查网络后重试")
+            UpdateCheckResult.Error("连接更新服务超时（3 秒），请检查网络后重试")
         } catch (_: UnknownHostException) {
-            UpdateCheckResult.Error("当前无网络连接或无法访问 GitHub，不影响本地正常使用")
+            UpdateCheckResult.Error("当前无网络连接或无法访问更新服务，不影响本地正常使用")
         } catch (_: IOException) {
             UpdateCheckResult.Error("网络请求失败，请检查网络连接后重试")
         } catch (_: Exception) {
             UpdateCheckResult.Error("检查更新失败，不影响本地正常使用")
         } finally {
-            connection?.disconnect()
+            cancelHook?.dispose()
+            runCatching { connection?.disconnect() }
         }
     }
 

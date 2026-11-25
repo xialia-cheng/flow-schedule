@@ -103,8 +103,45 @@ class MineScreenRobolectricTest {
         composeTestRule.onNodeWithTag("mine_group_advanced_header").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("mine_test_fluid_cloud_button").assertExists()
+        composeTestRule.onNodeWithTag("mine_update_mirror_official_direct").assertExists()
+        composeTestRule.onNodeWithTag("mine_update_mirror_fast_mirror").assertExists()
+        composeTestRule.onNodeWithTag("mine_update_mirror_stable_mirror").assertExists()
         composeTestRule.onNodeWithTag("mine_about_help_entry").assertExists()
         composeTestRule.onNodeWithTag("mine_stop_fluid_cloud_button").assertDoesNotExist()
+    }
+
+    @Test
+    fun `update available dialog renders 3 mirror chips and updates selected route`() {
+        val release = com.example.update.ReleaseInfo(
+            tagName = "v2.2.9",
+            versionName = "2.2.9",
+            releaseNotes = "双路并发检查更新与三线路下载",
+            downloadUrl = "https://github.com/xialia-cheng/ripple-plan/releases/download/v2.2.9/RipplePlan-v2.2.9-release.apk",
+            releasePageUrl = "https://github.com/xialia-cheng/ripple-plan/releases/tag/v2.2.9",
+            hasApkAsset = true,
+        )
+        var selectedRoute = com.example.data.UpdateMirrorSource.OFFICIAL_DIRECT
+        composeTestRule.setContent {
+            FlowScheduleTheme {
+                com.example.ui.update.UpdateAvailableDialog(
+                    release = release,
+                    selectedMirrorSource = selectedRoute,
+                    onSelectMirrorSource = { selectedRoute = it },
+                    onDismiss = {},
+                    onShowMessage = {},
+                )
+            }
+        }
+
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("update_available_dialog").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("update_dialog_mirror_official_direct").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("update_dialog_mirror_fast_mirror").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("update_dialog_mirror_stable_mirror").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("update_dialog_mirror_fast_mirror").performClick()
+        composeTestRule.waitForIdle()
+        org.junit.Assert.assertEquals(com.example.data.UpdateMirrorSource.FAST_MIRROR, selectedRoute)
     }
 
     @Test

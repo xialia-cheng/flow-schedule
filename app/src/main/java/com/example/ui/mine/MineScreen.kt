@@ -413,6 +413,7 @@ fun MineScreen(
                                 appUpdateViewModel.checkForUpdatesManually(onShowMessage)
                             }
                         },
+                        onSelectMirrorSource = { appUpdateViewModel.setUpdateMirrorSource(it) },
                         onAutoCheckUpdatesChange = { appUpdateViewModel.setAutoCheckUpdates(it) },
                         onOpenAboutSheet = { showAboutSheet = true },
                     )

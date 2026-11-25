@@ -51,6 +51,39 @@ enum class DndLevel(
     ),
 }
 
+enum class UpdateMirrorSource(
+    val label: String,
+    val description: String,
+    val urlPrefix: String,
+) {
+    OFFICIAL_DIRECT(
+        label = "官方直连",
+        description = "直接连接 GitHub 官方下载地址",
+        urlPrefix = "",
+    ),
+    FAST_MIRROR(
+        label = "高速镜像",
+        description = "通过 gh-proxy.com 高速镜像加速下载",
+        urlPrefix = "https://gh-proxy.com/",
+    ),
+    STABLE_MIRROR(
+        label = "稳定镜像",
+        description = "通过 ghproxy.net 长期稳定备用通道",
+        urlPrefix = "https://ghproxy.net/",
+    );
+
+    fun resolveDownloadUrl(rawUrl: String): String {
+        val clean = rawUrl.trim()
+        if (clean.isEmpty()) return clean
+        val originalUrl = when {
+            clean.startsWith("https://gh-proxy.com/") -> clean.removePrefix("https://gh-proxy.com/")
+            clean.startsWith("https://ghproxy.net/") -> clean.removePrefix("https://ghproxy.net/")
+            else -> clean
+        }
+        return if (urlPrefix.isEmpty()) originalUrl else "$urlPrefix$originalUrl"
+    }
+}
+
 data class CustomAiConfig(
     val enabled: Boolean = false,
     val baseUrl: String = "",
@@ -104,6 +137,7 @@ data class AppSettings(
     val customScheduleTags: List<CustomScheduleTag> = emptyList(),
     val autoCheckUpdates: Boolean = true,
     val lastUpdateCheckMillis: Long = 0L,
+    val updateMirrorSource: UpdateMirrorSource = UpdateMirrorSource.OFFICIAL_DIRECT,
     val hapticFeedbackEnabled: Boolean = true,
     val backgroundGuardEnabled: Boolean = false,
     val excludeFromRecents: Boolean = false,
@@ -151,6 +185,7 @@ class UserPreferencesRepository(private val context: Context) {
         val CUSTOM_SCHEDULE_TAGS_JSON = stringPreferencesKey("custom_schedule_tags_json")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val LAST_UPDATE_CHECK_MILLIS = longPreferencesKey("last_update_check_millis")
+        val UPDATE_MIRROR_SOURCE = stringPreferencesKey("update_mirror_source")
         val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
         val BACKGROUND_GUARD_ENABLED = booleanPreferencesKey("background_guard_enabled")
         val EXCLUDE_FROM_RECENTS = booleanPreferencesKey("exclude_from_recents")
@@ -175,6 +210,11 @@ class UserPreferencesRepository(private val context: Context) {
         val dndLevel = runCatching {
             prefs[Keys.DND_LEVEL]?.let { DndLevel.valueOf(it) } ?: DndLevel.PRIORITY
         }.getOrDefault(DndLevel.PRIORITY)
+
+        val updateMirrorSource = runCatching {
+            prefs[Keys.UPDATE_MIRROR_SOURCE]?.let { UpdateMirrorSource.valueOf(it) }
+                ?: UpdateMirrorSource.OFFICIAL_DIRECT
+        }.getOrDefault(UpdateMirrorSource.OFFICIAL_DIRECT)
 
         val encryptedKey = prefs[Keys.CUSTOM_AI_API_KEY_ENC].orEmpty()
         val decryptResult = if (encryptedKey.isNotBlank()) {
@@ -219,6 +259,7 @@ class UserPreferencesRepository(private val context: Context) {
             customScheduleTags = CustomScheduleTagCodec.decode(prefs[Keys.CUSTOM_SCHEDULE_TAGS_JSON].orEmpty()),
             autoCheckUpdates = prefs[Keys.AUTO_CHECK_UPDATES] ?: true,
             lastUpdateCheckMillis = prefs[Keys.LAST_UPDATE_CHECK_MILLIS] ?: 0L,
+            updateMirrorSource = updateMirrorSource,
             hapticFeedbackEnabled = prefs[Keys.HAPTIC_FEEDBACK_ENABLED] ?: true,
             backgroundGuardEnabled = prefs[Keys.BACKGROUND_GUARD_ENABLED] ?: false,
             excludeFromRecents = prefs[Keys.EXCLUDE_FROM_RECENTS] ?: false,
@@ -460,6 +501,12 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setLastUpdateCheckMillis(timestampMillis: Long) {
         context.userPreferencesDataStore.edit { prefs ->
             prefs[Keys.LAST_UPDATE_CHECK_MILLIS] = timestampMillis
+        }
+    }
+
+    suspend fun setUpdateMirrorSource(source: UpdateMirrorSource) {
+        context.userPreferencesDataStore.edit { prefs ->
+            prefs[Keys.UPDATE_MIRROR_SOURCE] = source.name
         }
     }
 

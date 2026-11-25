@@ -430,6 +430,8 @@ fun AppRootScreen(
     if (updateState.showUpdateDialog && pendingRelease != null) {
         UpdateAvailableDialog(
             release = pendingRelease,
+            selectedMirrorSource = updateState.selectedMirrorSource,
+            onSelectMirrorSource = { appUpdateViewModel.setUpdateMirrorSource(it) },
             onDismiss = { appUpdateViewModel.dismissUpdateDialog() },
             onShowMessage = showMessage,
         )

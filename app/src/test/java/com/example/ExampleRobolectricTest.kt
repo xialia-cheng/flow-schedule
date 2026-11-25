@@ -2462,8 +2462,136 @@ class ExampleRobolectricTest {
         assertTrue(tileServiceInfo.exported)
         assertEquals(android.Manifest.permission.BIND_QUICK_SETTINGS_TILE, tileServiceInfo.permission)
     }
+
+    @Test
+    fun `update mirror source resolves all 3 download routes and falls back to release page when no apk`() {
+        val checker = com.example.update.AppUpdateChecker
+        assertEquals(3_000, checker.CONNECT_TIMEOUT_MS)
+        assertEquals(3_000, checker.READ_TIMEOUT_MS)
+        assertEquals(
+            "https://ghproxy.net/https://api.github.com/repos/xialia-cheng/ripple-plan/releases/latest",
+            checker.MIRROR_RELEASE_API_URL,
+        )
+
+        val rawApkUrl =
+            "https://github.com/xialia-cheng/ripple-plan/releases/download/v2.2.9/RipplePlan-v2.2.9-release.apk"
+        val releaseWithApk = com.example.update.ReleaseInfo(
+            tagName = "v2.2.9",
+            versionName = "2.2.9",
+            releaseNotes = "双路检查更新与三线路下载",
+            downloadUrl = rawApkUrl,
+            releasePageUrl = "https://github.com/xialia-cheng/ripple-plan/releases/tag/v2.2.9",
+            hasApkAsset = true,
+        )
+
+        assertEquals(
+            rawApkUrl,
+            checker.resolveDownloadUrl(releaseWithApk, com.example.data.UpdateMirrorSource.OFFICIAL_DIRECT),
+        )
+        assertEquals(
+            "https://gh-proxy.com/$rawApkUrl",
+            checker.resolveDownloadUrl(releaseWithApk, com.example.data.UpdateMirrorSource.FAST_MIRROR),
+        )
+        assertEquals(
+            "https://ghproxy.net/$rawApkUrl",
+            checker.resolveDownloadUrl(releaseWithApk, com.example.data.UpdateMirrorSource.STABLE_MIRROR),
+        )
+        // Re-resolving an already-prefixed URL strips the old mirror prefix cleanly
+        assertEquals(
+            "https://ghproxy.net/$rawApkUrl",
+            com.example.data.UpdateMirrorSource.STABLE_MIRROR.resolveDownloadUrl("https://gh-proxy.com/$rawApkUrl"),
+        )
+
+        val releaseWithoutApk = releaseWithApk.copy(
+            downloadUrl = releaseWithApk.releasePageUrl,
+            hasApkAsset = false,
+        )
+        assertEquals(
+            releaseWithApk.releasePageUrl,
+            checker.resolveDownloadUrl(releaseWithoutApk, com.example.data.UpdateMirrorSource.FAST_MIRROR),
+        )
+    }
+
+    @Test
+    fun `dual route update race picks fastest valid result cancels slower route and tolerates single failure`() {
+        val checker = com.example.update.AppUpdateChecker
+        val release = com.example.update.ReleaseInfo(
+            tagName = "v2.2.9",
+            versionName = "2.2.9",
+            releaseNotes = "test",
+            downloadUrl = "https://github.com/xialia-cheng/ripple-plan/releases/download/v2.2.9/app.apk",
+            releasePageUrl = "https://github.com/xialia-cheng/ripple-plan/releases/tag/v2.2.9",
+            hasApkAsset = true,
+        )
+
+        // Case 1: Mirror wins first and slower official request is cancelled immediately
+        var slowCancelled = false
+        val raceWinner = kotlinx.coroutines.runBlocking {
+            checker.raceLatestRelease(
+                currentVersion = "2.2.8",
+                ioDispatcher = kotlinx.coroutines.Dispatchers.Default,
+                fetcher = { endpoint, _ ->
+                    if (endpoint == checker.LATEST_RELEASE_API_URL) {
+                        try {
+                            kotlinx.coroutines.delay(5_000L)
+                            com.example.update.UpdateCheckResult.UpToDate("2.2.8")
+                        } catch (ce: kotlinx.coroutines.CancellationException) {
+                            slowCancelled = true
+                            throw ce
+                        }
+                    } else {
+                        kotlinx.coroutines.delay(25L)
+                        com.example.update.UpdateCheckResult.UpdateAvailable(release)
+                    }
+                },
+            )
+        }
+        assertTrue(raceWinner is com.example.update.UpdateCheckResult.UpdateAvailable)
+        assertTrue("Expected slower endpoint coroutine to be cancelled on first winner", slowCancelled)
+
+        // Case 2: First route errors immediately, second route succeeds
+        val fallbackWinner = kotlinx.coroutines.runBlocking {
+            checker.raceLatestRelease(
+                currentVersion = "2.2.8",
+                ioDispatcher = kotlinx.coroutines.Dispatchers.Default,
+                fetcher = { endpoint, _ ->
+                    if (endpoint == checker.LATEST_RELEASE_API_URL) {
+                        com.example.update.UpdateCheckResult.Error("official timeout")
+                    } else {
+                        kotlinx.coroutines.delay(20L)
+                        com.example.update.UpdateCheckResult.UpToDate("2.2.8")
+                    }
+                },
+            )
+        }
+        assertTrue(fallbackWinner is com.example.update.UpdateCheckResult.UpToDate)
+
+        // Case 3: Both routes fail -> returns Error
+        val bothFailed = kotlinx.coroutines.runBlocking {
+            checker.raceLatestRelease(
+                currentVersion = "2.2.8",
+                ioDispatcher = kotlinx.coroutines.Dispatchers.Default,
+                fetcher = { endpoint, _ ->
+                    com.example.update.UpdateCheckResult.Error("failed: $endpoint")
+                },
+            )
+        }
+        assertTrue(bothFailed is com.example.update.UpdateCheckResult.Error)
+    }
+
+    @Test
+    fun `user preferences persists update mirror source selection`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = com.example.data.UserPreferencesRepository(context)
+        kotlinx.coroutines.runBlocking {
+            repo.setUpdateMirrorSource(com.example.data.UpdateMirrorSource.FAST_MIRROR)
+            assertEquals(com.example.data.UpdateMirrorSource.FAST_MIRROR, repo.settings.first().updateMirrorSource)
+
+            repo.setUpdateMirrorSource(com.example.data.UpdateMirrorSource.STABLE_MIRROR)
+            assertEquals(com.example.data.UpdateMirrorSource.STABLE_MIRROR, repo.settings.first().updateMirrorSource)
+
+            repo.setUpdateMirrorSource(com.example.data.UpdateMirrorSource.OFFICIAL_DIRECT)
+            assertEquals(com.example.data.UpdateMirrorSource.OFFICIAL_DIRECT, repo.settings.first().updateMirrorSource)
+        }
+    }
 }
-
-
-
-

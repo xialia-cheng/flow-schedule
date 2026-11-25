@@ -78,12 +78,14 @@ import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.R
 import com.example.data.CustomAiConfig
+import com.example.data.UpdateMirrorSource
 import com.example.smart.OpenAiCompatibleClient
 import com.example.ui.components.SelectablePillOption
 import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
 import com.example.ui.update.AppUpdateUiState
+import com.example.ui.update.UpdateMirrorChipRow
 
 @Composable
 internal fun AiAndBackupSectionContent(
@@ -218,6 +220,7 @@ internal fun AdvancedAndAboutSectionContent(
     onTriggerFluidCloudTest: () -> Unit,
     onStopFluidCloudTest: () -> Unit = {},
     onCheckUpdatesClick: () -> Unit,
+    onSelectMirrorSource: (UpdateMirrorSource) -> Unit = {},
     onAutoCheckUpdatesChange: (Boolean) -> Unit,
     onOpenAboutSheet: () -> Unit,
 ) {
@@ -306,10 +309,10 @@ internal fun AdvancedAndAboutSectionContent(
                 }
                 Text(
                     text = when {
-                        updateState.isChecking -> "正在从 GitHub Releases 检查最新版本..."
+                        updateState.isChecking -> "正在双路竞速检查 GitHub Releases 最新版本..."
                         updateState.availableRelease != null -> "点击查看更新日志并前往浏览器下载新版本"
                         !updateState.lastStatusHint.isNullOrBlank() -> updateState.lastStatusHint
-                        else -> "仅向 GitHub Releases 发起只读检查，不上传个人数据"
+                        else -> "双路竞速只读检查 GitHub Releases，不上传个人数据"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = colorScheme.onSurfaceVariant,
@@ -329,6 +332,13 @@ internal fun AdvancedAndAboutSectionContent(
             )
         }
     }
+
+    UpdateMirrorChipRow(
+        selectedSource = updateState.selectedMirrorSource,
+        onSelectSource = onSelectMirrorSource,
+        tagPrefix = "mine_update",
+        modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
+    )
 
     HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.55f))
 

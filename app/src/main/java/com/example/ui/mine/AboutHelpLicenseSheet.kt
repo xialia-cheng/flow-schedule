@@ -391,10 +391,10 @@ fun AboutHelpLicenseSheet(
                                     )
                                     Text(
                                         text = when {
-                                            updateState.isChecking -> "正在请求 GitHub Releases 公开版本信息..."
+                                            updateState.isChecking -> "正在双路竞速请求 GitHub Releases 公开版本信息..."
                                             updateState.availableRelease != null -> "点击查看更新日志并前往浏览器下载"
                                             !updateState.lastStatusHint.isNullOrBlank() -> updateState.lastStatusHint
-                                            else -> "仅读取 GitHub 公开 Releases 元数据"
+                                            else -> "双路竞速读取 GitHub 公开 Releases 元数据"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = colorScheme.onSurfaceVariant,
@@ -452,7 +452,7 @@ fun AboutHelpLicenseSheet(
                     )
                     HelpBulletItem(
                         heading = "检查版本更新（可控联网场景 1/2）",
-                        body = "仅向 GitHub 公开 Releases 接口发起只读 HTTPS 请求以获取最新版本号与更新日志，不上传任何设备标识或个人课表数据；在「我的」页面关闭“启动时自动检查更新”后即可保持完全零联网运行。",
+                        body = "检查更新及下载仅通过官方 GitHub 或所选 HTTPS 公共镜像获取公开 Release，不上传任何个人数据；在「我的」页面关闭“启动时自动检查更新”后即可保持完全零联网运行。",
                     )
                     HelpBulletItem(
                         heading = "自定义 AI 解析（可控联网场景 2/2）",
