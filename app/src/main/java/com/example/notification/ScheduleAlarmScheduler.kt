@@ -80,24 +80,61 @@ class ScheduleAlarmScheduler(private val context: Context) {
     }
 
     fun cancelAlarmsForSchedule(scheduleId: Long) {
-        val base = (scheduleId.toInt() and 0x3FFF) * 8
         for (day in 0..7) {
-            cancelAlarmsForKey(day * 50_000 + base)
+            cancelAlarmsForKey(
+                LiveActivityItem.requestKeyFor(
+                    sourceType = LiveActivitySourceType.SCHEDULE,
+                    sourceId = scheduleId,
+                    dayOfWeek = day,
+                    isTest = false,
+                ),
+            )
         }
     }
 
     fun cancelAlarmsForTestSchedule(scheduleId: Long) {
-        val base = (scheduleId.toInt() and 0x3FFF) * 8
         for (day in 0..7) {
-            cancelAlarmsForKey(800_000 + day * 50_000 + base)
+            cancelAlarmsForKey(
+                LiveActivityItem.requestKeyFor(
+                    sourceType = LiveActivitySourceType.SCHEDULE,
+                    sourceId = scheduleId,
+                    dayOfWeek = day,
+                    isTest = true,
+                ),
+            )
+            cancelAlarmsForKey(
+                LiveActivityItem.requestKeyFor(
+                    sourceType = LiveActivitySourceType.COURSE,
+                    sourceId = scheduleId,
+                    dayOfWeek = day,
+                    isTest = true,
+                ),
+            )
         }
     }
 
     fun cancelAlarmsForCourse(courseId: Long) {
-        val base = (courseId.toInt() and 0x3FFF) * 8
         for (day in 0..7) {
-            cancelAlarmsForKey(400_000 + day * 50_000 + base)
+            cancelAlarmsForKey(
+                LiveActivityItem.requestKeyFor(
+                    sourceType = LiveActivitySourceType.COURSE,
+                    sourceId = courseId,
+                    dayOfWeek = day,
+                    isTest = false,
+                ),
+            )
         }
+    }
+
+    fun cancelAlarmsForCourseOnDay(courseId: Long, dayOfWeek: Int) {
+        cancelAlarmsForKey(
+            LiveActivityItem.requestKeyFor(
+                sourceType = LiveActivitySourceType.COURSE,
+                sourceId = courseId,
+                dayOfWeek = dayOfWeek,
+                isTest = false,
+            ),
+        )
     }
 
     /**
@@ -320,8 +357,8 @@ class ScheduleAlarmScheduler(private val context: Context) {
         triggerAtMillis: Long,
     ): PendingIntent {
         val requestCode = RE_REMINDER_REQUEST_BASE +
-            (if (isCourse) 10_000 else 0) +
-            (itemId.toInt() and 0x1FFF)
+            (if (isCourse) RE_REMINDER_COURSE_OFFSET else 0) +
+            (itemId.toInt() and 0xFFFF)
         val intent = Intent(context, ScheduleAlarmReceiver::class.java).apply {
             action = ScheduleAlarmReceiver.ACTION_CUSTOM_RE_REMINDER
             putExtra(EXTRA_RE_REMINDER_KEY, reReminderPrefKey(isCourse, itemId))
@@ -355,9 +392,10 @@ class ScheduleAlarmScheduler(private val context: Context) {
         const val PHASE_END = 6
         const val PHASE_DAILY_ROLLOVER = 8
 
-        private const val SYSTEM_DAILY_ROLLOVER_REQUEST_KEY = 920_000
-        private const val GUARD_RESURRECT_REQUEST_CODE = 925_001
-        private const val RE_REMINDER_REQUEST_BASE = 850_000
+        private const val RE_REMINDER_REQUEST_BASE = 130_000_000
+        private const val RE_REMINDER_COURSE_OFFSET = 1_000_000
+        private const val SYSTEM_DAILY_ROLLOVER_REQUEST_KEY = 150_000_000
+        private const val GUARD_RESURRECT_REQUEST_CODE = 150_010_000
         private const val PREFS_RE_REMINDERS = "flow_re_reminders"
 
         fun reReminderPrefKey(isCourse: Boolean, itemId: Long): String =

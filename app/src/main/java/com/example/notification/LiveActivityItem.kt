@@ -175,19 +175,46 @@ data class LiveActivityItem(
         }
     }
 
-    fun alarmRequestKey(): Int {
-        val base = (sourceId.toInt() and 0x3FFF) * 8
-        val typeOffset = when {
-            isTest -> 800_000
-            sourceType == LiveActivitySourceType.COURSE -> 400_000
-            else -> 0
-        }
-        val dayHash = (DateTimeUtils.isoDayOfWeek(startTimeMillis) and 0x7) * 50_000
-        return typeOffset + dayHash + base
-    }
+    fun alarmRequestKey(): Int = requestKeyFor(
+        sourceType = sourceType,
+        sourceId = sourceId,
+        dayOfWeek = DateTimeUtils.isoDayOfWeek(startTimeMillis),
+        isTest = isTest,
+    )
+
+    fun actionRequestKey(actionSlot: Int): Int =
+        REQUEST_BAND_NOTIFICATION_ACTION + alarmRequestKey() + (actionSlot and 0xF)
 
     companion object {
         private const val MAX_CAPSULE_TEXT_CHARS = 7
+
+        private const val REQUEST_BAND_SCHEDULE = 10_000_000
+        private const val REQUEST_BAND_COURSE = 40_000_000
+        private const val REQUEST_BAND_TEST_SCHEDULE = 70_000_000
+        private const val REQUEST_BAND_FOCUS = 100_000_000
+        private const val REQUEST_BAND_TEST_COURSE = 180_000_000
+        private const val REQUEST_BAND_NOTIFICATION_ACTION = 300_000_000
+        private const val REQUEST_DAY_STEP = 2_000_000
+        private const val REQUEST_ITEM_STRIDE = 16
+        private const val REQUEST_ITEM_ID_MASK = 0xFFFF
+
+        fun requestKeyFor(
+            sourceType: LiveActivitySourceType,
+            sourceId: Long,
+            dayOfWeek: Int,
+            isTest: Boolean = false,
+        ): Int {
+            val typeBand = when {
+                isTest && sourceType == LiveActivitySourceType.COURSE -> REQUEST_BAND_TEST_COURSE
+                isTest -> REQUEST_BAND_TEST_SCHEDULE
+                sourceType == LiveActivitySourceType.COURSE -> REQUEST_BAND_COURSE
+                sourceType == LiveActivitySourceType.FOCUS -> REQUEST_BAND_FOCUS
+                else -> REQUEST_BAND_SCHEDULE
+            }
+            val safeDay = dayOfWeek and 0x7
+            val itemOffset = (sourceId.toInt() and REQUEST_ITEM_ID_MASK) * REQUEST_ITEM_STRIDE
+            return typeBand + safeDay * REQUEST_DAY_STEP + itemOffset
+        }
 
         private val COMMON_COURSE_ABBREVIATIONS = listOf(
             "高等数学" to "高数",

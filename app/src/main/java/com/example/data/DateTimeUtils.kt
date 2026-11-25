@@ -64,6 +64,16 @@ object DateTimeUtils {
         return formatter.format(Date(millis))
     }
 
+    fun parseDateKeyMillis(dateKey: String): Long? {
+        if (dateKey.isBlank()) return null
+        return runCatching {
+            val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                isLenient = false
+            }
+            formatter.parse(dateKey.trim())?.time?.let { startOfDayMillis(it) }
+        }.getOrNull()
+    }
+
     fun startOfDayMillis(millis: Long): Long {
         val cal = Calendar.getInstance().apply {
             timeInMillis = millis

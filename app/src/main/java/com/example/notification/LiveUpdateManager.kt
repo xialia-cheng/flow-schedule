@@ -790,7 +790,8 @@ class LiveUpdateManager(private val context: Context) {
             putExtra(EXTRA_SOURCE_ID, item.sourceId)
             putExtra(EXTRA_DATE_KEY, item.dateKey)
         }
-        val requestCode = item.alarmRequestKey() + requestCodeOffset
+        val slot = (requestCodeOffset - 100).coerceIn(1, 15)
+        val requestCode = item.actionRequestKey(slot)
         return PendingIntent.getBroadcast(
             context,
             requestCode,

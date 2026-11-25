@@ -85,24 +85,12 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
         )
         val shouldAlert = phase == ScheduleAlarmScheduler.PHASE_REMINDER ||
             phase == ScheduleAlarmScheduler.PHASE_START
-        val shouldReschedule = phase == ScheduleAlarmScheduler.PHASE_REMINDER ||
-            phase == ScheduleAlarmScheduler.PHASE_START ||
-            phase == ScheduleAlarmScheduler.PHASE_END ||
-            phase == ScheduleAlarmScheduler.PHASE_DAILY_ROLLOVER
-
-        // Guard against AlarmManager early-delivery jitter (e.g., firing 100ms before target endTime)
-        // so PHASE_START cleanly switches to In-Progress and PHASE_END cleanly dismisses/advances.
-        val actualNow = System.currentTimeMillis()
-        val effectiveNow = if (
-            expectedTriggerMillis > 0L &&
-            (phase == ScheduleAlarmScheduler.PHASE_REMINDER ||
-                phase == ScheduleAlarmScheduler.PHASE_START ||
-                phase == ScheduleAlarmScheduler.PHASE_END)
-        ) {
-            maxOf(actualNow, expectedTriggerMillis + 500L)
-        } else {
-            actualNow
-        }
+        val shouldReschedule = true
+        val effectiveNow = computeEffectiveTriggerNowMillis(
+            phase = phase,
+            expectedTriggerMillis = expectedTriggerMillis,
+            actualNowMillis = System.currentTimeMillis(),
+        )
 
         val pendingResult = goAsync()
         val wakeLock = acquireReceiverWakeLock(context)
@@ -167,5 +155,24 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
 
         private const val WAKE_LOCK_TAG = "rippleplan:alarm_receiver"
         private const val WAKE_LOCK_TIMEOUT_MS = 8_000L
+
+        /**
+         * Guards against AlarmManager early-delivery jitter: on [ScheduleAlarmScheduler.PHASE_START],
+         * ensures at least a 1,000ms buffer past [expectedTriggerMillis] so `now < startTimeMillis`
+         * never traps the notification in "课前准备".
+         */
+        internal fun computeEffectiveTriggerNowMillis(
+            phase: Int,
+            expectedTriggerMillis: Long,
+            actualNowMillis: Long,
+        ): Long {
+            if (expectedTriggerMillis <= 0L) return actualNowMillis
+            return when (phase) {
+                ScheduleAlarmScheduler.PHASE_START -> maxOf(actualNowMillis, expectedTriggerMillis + 1_000L)
+                ScheduleAlarmScheduler.PHASE_REMINDER,
+                ScheduleAlarmScheduler.PHASE_END -> maxOf(actualNowMillis, expectedTriggerMillis + 500L)
+                else -> actualNowMillis
+            }
+        }
     }
 }

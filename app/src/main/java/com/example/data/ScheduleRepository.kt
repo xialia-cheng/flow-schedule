@@ -103,7 +103,7 @@ class ScheduleRepository(
         }
         alarmScheduler.cancelCustomReReminder(isCourse = false, itemId = schedule.id)
         dao.deleteById(schedule.id)
-        liveUpdateCoordinator.syncAll(rescheduleAlarms = false)
+        liveUpdateCoordinator.syncAll(rescheduleAlarms = true)
     }
 
     suspend fun restoreSchedule(schedule: ScheduleEntity) {

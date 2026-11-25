@@ -2078,6 +2078,272 @@ class ExampleRobolectricTest {
         )
         assertEquals(end, nextFromActive)
     }
+
+    @Test
+    fun `chinese nlp parser hash cache hits on repeated descriptions and isolates date hour or section changes`() {
+        ChineseNaturalLanguageParser.clearCache()
+        val sections = CourseColorPalette.defaultSectionTimes(1L)
+        val anchor = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 25, 10, 5, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        val first = ChineseNaturalLanguageParser.parse(
+            rawInput = "明天下午3点在教A-204开班会 提前15分钟",
+            nowMillis = anchor,
+            sectionTimes = sections,
+        )
+        val statsAfterFirst = ChineseNaturalLanguageParser.cacheStats()
+        assertEquals(1L, statsAfterFirst.misses)
+        assertEquals(0L, statsAfterFirst.hits)
+        assertEquals(1, statsAfterFirst.size)
+
+        // Same text within the same date & hour -> cache hit
+        val second = ChineseNaturalLanguageParser.parse(
+            rawInput = "  明天下午3点在教A-204开会 ".replace("开会", "开班会 提前15分钟"),
+            nowMillis = anchor + 20 * 60_000L,
+            sectionTimes = sections,
+        )
+        val statsAfterSecond = ChineseNaturalLanguageParser.cacheStats()
+        assertEquals(1L, statsAfterSecond.misses)
+        assertEquals(1L, statsAfterSecond.hits)
+        assertEquals(first, second)
+
+        // Different hour bucket -> isolated miss so fallback hour calculations never go stale
+        ChineseNaturalLanguageParser.parse(
+            rawInput = "明天下午3点在教A-204开班会 提前15分钟",
+            nowMillis = anchor + 2 * 3_600_000L,
+            sectionTimes = sections,
+        )
+        assertEquals(2L, ChineseNaturalLanguageParser.cacheStats().misses)
+
+        // Modified section times -> isolated miss
+        val altSections = sections.map {
+            if (it.sectionNumber == 1) it.copy(startHour = 8, startMinute = 30) else it
+        }
+        ChineseNaturalLanguageParser.parse(
+            rawInput = "明天下午3点在教A-204开班会 提前15分钟",
+            nowMillis = anchor,
+            sectionTimes = altSections,
+        )
+        assertEquals(3L, ChineseNaturalLanguageParser.cacheStats().misses)
+    }
+
+    @Test
+    fun `alarmRequestKey prevents collisions across schedules courses tests and ScheduleAlarmReceiver buffers PHASE_START`() {
+        // 1. Disjointness across types, days 1..7, high IDs, and phases 1..8
+        val allCodes = HashSet<Int>()
+        var expectedCount = 0
+        val sampleIds = listOf(1L, 2L, 13L, 100L, 6250L, 12500L, 32767L)
+        val phases = listOf(
+            com.example.notification.ScheduleAlarmScheduler.PHASE_REMINDER,
+            com.example.notification.ScheduleAlarmScheduler.PHASE_START,
+            com.example.notification.ScheduleAlarmScheduler.PHASE_PROGRESS_25,
+            com.example.notification.ScheduleAlarmScheduler.PHASE_PROGRESS_50,
+            com.example.notification.ScheduleAlarmScheduler.PHASE_PROGRESS_75,
+            com.example.notification.ScheduleAlarmScheduler.PHASE_END,
+        )
+        for (id in sampleIds) {
+            for (day in 1..7) {
+                for (isTest in listOf(false, true)) {
+                    for (type in LiveActivitySourceType.entries) {
+                        if (isTest && type == LiveActivitySourceType.FOCUS) continue
+                        val base = LiveActivityItem.requestKeyFor(type, id, day, isTest)
+                        for (p in phases) {
+                            allCodes.add(base + p)
+                            expectedCount++
+                        }
+                    }
+                }
+            }
+        }
+        assertEquals(expectedCount, allCodes.size)
+
+        // 2. Verify ScheduleAlarmScheduler registers PHASE_REMINDER, PHASE_START, and PHASE_END
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        val shadowAlarmManager = org.robolectric.Shadows.shadowOf(alarmManager)
+        val scheduler = com.example.notification.ScheduleAlarmScheduler(context)
+
+        val now = 1_795_000_000_000L
+        val start = now + 15 * 60_000L
+        val end = start + 90 * 60_000L
+        val courseItem = LiveActivityItem(
+            sourceType = LiveActivitySourceType.COURSE,
+            sourceId = 15L,
+            dateKey = "2026-11-25",
+            title = "操作系统",
+            startTimeMillis = start,
+            endTimeMillis = end,
+            reminderMinutesBefore = 10,
+        )
+        scheduler.scheduleAlarmsFor(courseItem, nowMillis = now)
+
+        val scheduledPhases = shadowAlarmManager.scheduledAlarms.mapNotNull { alarm ->
+            val pi = alarm.operation ?: return@mapNotNull null
+            val intent = org.robolectric.Shadows.shadowOf(pi).savedIntent
+            if (intent.action == com.example.notification.ScheduleAlarmReceiver.ACTION_SCHEDULE_TRIGGER) {
+                intent.getIntExtra(com.example.notification.ScheduleAlarmScheduler.EXTRA_ALARM_PHASE, -1) to alarm.triggerAtMs
+            } else {
+                null
+            }
+        }.toMap()
+
+        assertEquals(courseItem.reminderTriggerMillis, scheduledPhases[com.example.notification.ScheduleAlarmScheduler.PHASE_REMINDER])
+        assertEquals(start, scheduledPhases[com.example.notification.ScheduleAlarmScheduler.PHASE_START])
+        assertEquals(end, scheduledPhases[com.example.notification.ScheduleAlarmScheduler.PHASE_END])
+
+        // 3. Verify 1000ms buffer when AlarmManager delivers PHASE_START slightly early
+        val bufferedStart = com.example.notification.ScheduleAlarmReceiver.computeEffectiveTriggerNowMillis(
+            phase = com.example.notification.ScheduleAlarmScheduler.PHASE_START,
+            expectedTriggerMillis = start,
+            actualNowMillis = start - 350L,
+        )
+        assertEquals(start + 1_000L, bufferedStart)
+        assertTrue(courseItem.isInProgress(bufferedStart))
+    }
+
+    @Test
+    fun `coordinator syncAll transitions real schedule from prep to active when crossing startTimeMillis`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val appContext = ApplicationProvider.getApplicationContext<android.app.Application>()
+        org.robolectric.Shadows.shadowOf(appContext).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            context,
+            com.example.data.ScheduleDatabase::class.java,
+        ).allowMainThreadQueries().build()
+
+        try {
+            val prefs = com.example.data.UserPreferencesRepository(context)
+            val scheduler = com.example.notification.ScheduleAlarmScheduler(context)
+            val manager = com.example.notification.LiveUpdateManager(context)
+            manager.ensureNotificationChannel()
+            val coordinator = com.example.notification.LiveUpdateCoordinator(
+                scheduleDao = db.scheduleDao(),
+                timetableDao = db.timetableDao(),
+                preferencesRepository = prefs,
+                alarmScheduler = scheduler,
+                liveUpdateManager = manager,
+            )
+
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            val shadowNm = org.robolectric.Shadows.shadowOf(nm)
+
+            val base = System.currentTimeMillis()
+            val start = base + 10 * 60_000L
+            val end = start + 60 * 60_000L
+
+            kotlinx.coroutines.runBlocking {
+                db.scheduleDao().insertSchedule(
+                    ScheduleEntity(
+                        title = "软件体系结构评审",
+                        startTimeMillis = start,
+                        endTimeMillis = end,
+                        reminderMinutesBefore = 15,
+                    ),
+                )
+
+                // Phase 1: Prep window -> notification targets startTimeMillis
+                coordinator.syncAll(nowMillis = base, forceAlert = true, rescheduleAlarms = true)
+                val prepNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+                assertNotNull(prepNotif)
+                assertEquals(start, prepNotif.`when`)
+                assertTrue(
+                    prepNotif.extras.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)
+                        ?.toString().orEmpty().contains("课前准备"),
+                )
+
+                // Phase 2: Crossing startTimeMillis (simulating ACTION_TIME_TICK with forceAlert = false)
+                coordinator.syncAll(nowMillis = start + 1_000L, forceAlert = false, rescheduleAlarms = false)
+                val activeNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+                assertNotNull(activeNotif)
+                assertEquals(end, activeNotif.`when`)
+                assertEquals(0, activeNotif.flags and android.app.Notification.FLAG_ONLY_ALERT_ONCE)
+                assertTrue(
+                    activeNotif.extras.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)
+                        ?.toString().orEmpty().contains("进行中"),
+                )
+
+                // Phase 3: Passing endTimeMillis dismisses notification
+                coordinator.syncAll(nowMillis = end + 1_000L, forceAlert = false, rescheduleAlarms = true)
+                assertNull(manager.activeLiveActivity.value)
+                assertNull(shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID))
+            }
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `guard service triggerTimeTickSync drives live update notification from prep to active`() {
+        val app = ApplicationProvider.getApplicationContext<ScheduleApp>()
+        org.robolectric.Shadows.shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val shadowNm = org.robolectric.Shadows.shadowOf(nm)
+
+        val now = System.currentTimeMillis()
+        val start = now + 5 * 60_000L
+        val end = start + 45 * 60_000L
+        var insertedId = 0L
+
+        val scheduleDao = com.example.data.ScheduleDatabase.getInstance(app).scheduleDao()
+        val serviceController = org.robolectric.Robolectric.buildService(
+            com.example.notification.ScheduleGuardService::class.java,
+        ).create()
+        try {
+            kotlinx.coroutines.runBlocking {
+                app.container.preferencesRepository.setBackgroundGuardEnabled(true)
+                insertedId = scheduleDao.insertSchedule(
+                    ScheduleEntity(
+                        title = "守护服务切阶段演练",
+                        startTimeMillis = start,
+                        endTimeMillis = end,
+                        reminderMinutesBefore = 15,
+                    ),
+                )
+                app.container.liveUpdateCoordinator.syncAll(
+                    nowMillis = now,
+                    forceAlert = true,
+                    rescheduleAlarms = false,
+                )
+            }
+
+            val prepNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+            assertNotNull(prepNotif)
+            assertTrue(
+                prepNotif.extras.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)
+                    ?.toString().orEmpty().contains("课前准备"),
+            )
+
+            // Trigger ACTION_TIME_TICK handler directly at start + 1s
+            serviceController.get().triggerTimeTickSync(nowOverrideMillis = start + 1_000L)
+
+            val deadline = System.currentTimeMillis() + 5_000L
+            var transitioned = false
+            while (System.currentTimeMillis() < deadline) {
+                val subText = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+                    ?.extras
+                    ?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)
+                    ?.toString()
+                    .orEmpty()
+                if (subText.contains("进行中")) {
+                    transitioned = true
+                    break
+                }
+                Thread.sleep(50L)
+            }
+            assertTrue("Expected ScheduleGuardService TIME_TICK sync to transition Live Update into 进行中", transitioned)
+        } finally {
+            serviceController.destroy()
+            if (insertedId != 0L) {
+                kotlinx.coroutines.runBlocking {
+                    scheduleDao.deleteById(insertedId)
+                    app.container.liveUpdateManager.cancelLiveUpdate()
+                }
+            }
+        }
+    }
 }
 
 

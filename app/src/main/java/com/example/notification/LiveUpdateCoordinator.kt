@@ -262,13 +262,16 @@ class LiveUpdateCoordinator(
         if (sourceType == LiveActivitySourceType.FOCUS) {
             liveUpdateManager.clearFocusLiveActivity()
             liveUpdateManager.restoreDndIfEnabledByApp()
-            syncAll(nowMillis = now, forceAlert = false, rescheduleAlarms = false)
+            syncAll(nowMillis = now, forceAlert = false, rescheduleAlarms = true)
             return
         }
         val existingSchedule = scheduleDao.getScheduleById(sourceId)
         if (sourceType == LiveActivitySourceType.SCHEDULE || existingSchedule?.isTestSchedule == true) {
             completeScheduleInternal(sourceId, now)
         } else {
+            val isoDay = DateTimeUtils.parseDateKeyMillis(dateKey)?.let { DateTimeUtils.isoDayOfWeek(it) }
+                ?: DateTimeUtils.isoDayOfWeek(now)
+            alarmScheduler.cancelAlarmsForCourseOnDay(sourceId, isoDay)
             val existing = timetableDao.getCourseState(sourceId, dateKey)
             timetableDao.upsertCourseState(
                 CourseOccurrenceStateEntity(
@@ -281,7 +284,7 @@ class LiveUpdateCoordinator(
             )
         }
         liveUpdateManager.restoreDndIfEnabledByApp()
-        syncAll(nowMillis = now, forceAlert = false, rescheduleAlarms = false)
+        syncAll(nowMillis = now, forceAlert = false, rescheduleAlarms = true)
     }
 
     suspend fun handleToggleDndAction() {
@@ -330,15 +333,24 @@ class LiveUpdateCoordinator(
         sourceId: Long,
         dateKey: String,
     ) {
+        val now = System.currentTimeMillis()
         if (sourceType == LiveActivitySourceType.FOCUS) {
             liveUpdateManager.clearFocusLiveActivity()
+            syncAll(nowMillis = now, forceAlert = false, rescheduleAlarms = true)
             return
         }
         val existingSchedule = scheduleDao.getScheduleById(sourceId)
         if (sourceType == LiveActivitySourceType.SCHEDULE || existingSchedule?.isTestSchedule == true) {
             val current = existingSchedule ?: return
+            alarmScheduler.cancelAlarmsForSchedule(current.id)
+            if (current.isTestSchedule) {
+                alarmScheduler.cancelAlarmsForTestSchedule(current.id)
+            }
             scheduleDao.updateSchedule(current.copy(dismissedLiveUpdate = true))
         } else {
+            val isoDay = DateTimeUtils.parseDateKeyMillis(dateKey)?.let { DateTimeUtils.isoDayOfWeek(it) }
+                ?: DateTimeUtils.isoDayOfWeek(now)
+            alarmScheduler.cancelAlarmsForCourseOnDay(sourceId, isoDay)
             val existing = timetableDao.getCourseState(sourceId, dateKey)
             timetableDao.upsertCourseState(
                 CourseOccurrenceStateEntity(
@@ -351,6 +363,7 @@ class LiveUpdateCoordinator(
             )
         }
         liveUpdateManager.cancelLiveUpdate()
+        syncAll(nowMillis = now, forceAlert = false, rescheduleAlarms = true)
     }
 
     private suspend fun completeScheduleInternal(scheduleId: Long, nowMillis: Long) {

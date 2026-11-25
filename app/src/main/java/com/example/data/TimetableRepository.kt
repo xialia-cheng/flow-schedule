@@ -87,6 +87,13 @@ class TimetableRepository(
     }
 
     suspend fun switchTimetable(timetableId: Long) {
+        timetableDao.getActiveTimetable()?.let { previous ->
+            if (previous.id != timetableId) {
+                timetableDao.getCoursesForTimetable(previous.id).forEach {
+                    alarmScheduler.cancelAlarmsForCourse(it.id)
+                }
+            }
+        }
         timetableDao.setActiveTimetable(timetableId)
         liveUpdateCoordinator.syncAll(rescheduleAlarms = true)
     }
@@ -99,6 +106,10 @@ class TimetableRepository(
     suspend fun deleteTimetable(timetableId: Long): Boolean {
         val all = timetableDao.getAllTimetables()
         if (all.size <= 1) return false
+        timetableDao.getCoursesForTimetable(timetableId).forEach { course ->
+            alarmScheduler.cancelAlarmsForCourse(course.id)
+            alarmScheduler.cancelCustomReReminder(isCourse = true, itemId = course.id)
+        }
         timetableDao.deleteTimetableById(timetableId)
         val remaining = timetableDao.getAllTimetables()
         if (remaining.none { it.isActive } && remaining.isNotEmpty()) {
@@ -112,6 +123,7 @@ class TimetableRepository(
         val id = if (course.id == 0L) {
             timetableDao.insertCourse(course)
         } else {
+            alarmScheduler.cancelAlarmsForCourse(course.id)
             timetableDao.updateCourse(course)
             course.id
         }

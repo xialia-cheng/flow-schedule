@@ -69,6 +69,10 @@ class ScheduleGuardService : Service() {
     private val timeEventReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val action = intent.action ?: return
+            if (action == Intent.ACTION_TIME_TICK) {
+                triggerTimeTickSync()
+                return
+            }
             val now = System.currentTimeMillis()
             val activeLive = (applicationContext as? ScheduleApp)
                 ?.container
@@ -86,7 +90,7 @@ class ScheduleGuardService : Service() {
             triggerSync(
                 rescheduleAlarms = forceReschedule,
                 forceAlert = crossedBoundary,
-                holdShortWakeLock = forceLiveSync || action == Intent.ACTION_TIME_TICK,
+                holdShortWakeLock = forceLiveSync,
             )
         }
     }
@@ -196,6 +200,46 @@ class ScheduleGuardService : Service() {
             )
             true
         }.getOrDefault(false)
+    }
+
+    /**
+     * Handles every system [Intent.ACTION_TIME_TICK] broadcast directly in the service coroutine,
+     * driving [LiveUpdateCoordinator.syncAll] even if background AlarmManager timers were deferred.
+     */
+    internal fun triggerTimeTickSync(nowOverrideMillis: Long? = null) {
+        val wakeLock = acquireWakeLock(SYNC_WAKE_LOCK_TAG, 6_000L)
+        serviceScope.launch {
+            try {
+                syncMutex.withLock {
+                    val app = applicationContext as? ScheduleApp ?: return@withLock
+                    val settings = app.container.preferencesRepository.settings.first()
+                    lastKnownGuardEnabled = settings.backgroundGuardEnabled
+                    if (!settings.backgroundGuardEnabled) {
+                        phaseBoundaryJob?.cancel()
+                        stopForegroundAndSelf()
+                        return@withLock
+                    }
+
+                    val now = nowOverrideMillis ?: System.currentTimeMillis()
+                    runCatching {
+                        app.container.liveUpdateCoordinator.syncAll(
+                            nowMillis = now,
+                            forceAlert = false,
+                            rescheduleAlarms = false,
+                        )
+                    }
+
+                    val snapshot = resolveGuardSnapshot(applicationContext, now)
+                    if (snapshot.statusText != lastPostedStatusText) {
+                        lastPostedStatusText = snapshot.statusText
+                        updateGuardNotification(snapshot.statusText)
+                    }
+                    schedulePhaseBoundaryPatrol(snapshot.nextBoundaryMillis)
+                }
+            } finally {
+                releaseWakeLockSafely(wakeLock)
+            }
+        }
     }
 
     private fun triggerSync(

@@ -6,16 +6,61 @@ import com.example.data.RepeatRule
 import com.example.data.ScheduleCategory
 import com.example.data.SectionTimeEntity
 import com.example.data.WeekType
+import java.security.MessageDigest
 import java.util.Calendar
 import kotlin.math.abs
+
+data class ParserCacheStats(
+    val hits: Long,
+    val misses: Long,
+    val size: Int,
+)
 
 /**
  * Pure offline Chinese natural language parser for creating schedules and timetable courses.
  * API 24-safe (uses java.util.Calendar rather than java.time).
+ * Includes a thread-safe bounded SHA-256 LRU cache for repeated schedule descriptions.
  */
 object ChineseNaturalLanguageParser {
 
     private const val ONE_DAY_MS = 86_400_000L
+    private const val MAX_CACHE_ENTRIES = 128
+
+    private val CLAUSE_SPLIT_REGEX =
+        Regex("[;；\\n]+|(?<=\\S)\\s*(?:另外|还有|以及然后|然后)\\s*")
+    private val DND_REGEX = Regex("(?:并?自动)?(?:开启|打开)?(?:免打扰|勿扰模式?|静音模式?)")
+    private val NO_REMINDER_REGEX = Regex("(?:不用|无需|不)提醒")
+    private val REMINDER_HALF_HOUR_REGEX = Regex("(?:提前|前)\\s*半\\s*(?:个)?小时(?:提醒)?")
+    private val REMINDER_HOUR_REGEX = Regex("(?:提前|前)\\s*([0-9一二两三四五六七八九十]+)\\s*(?:个)?小时(?:提醒)?")
+    private val REMINDER_MIN_REGEX = Regex("(?:提前|前)\\s*([0-9一二两三四五六七八九十]+)\\s*分钟?(?:提醒)?")
+    private val AT_LOC_REGEX = Regex("@([^\\s，。,.；;!！?？]+)")
+    private val IN_LOC_REGEX = Regex(
+        "(?:在|地点[:：]?|教室[:：]?)([^\\s，。,.；;!！?？上开做参加讨论复习写举行听讲]{1,18})(?=[上开做参加讨论复习写举行听讲\\s，。,.；;]|$)",
+    )
+    private val PURE_TIME_FRAG_REGEX = Regex("^[0-9一二三四五六七八九十点分号周今天明后早中晚上下午:-]+$")
+
+    private val cacheLock = Any()
+    private val parseCache = object : LinkedHashMap<String, List<SmartParsedDraft>>(
+        MAX_CACHE_ENTRIES + 1,
+        0.75f,
+        true,
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, List<SmartParsedDraft>>?,
+        ): Boolean = size > MAX_CACHE_ENTRIES
+    }
+    private var cacheHits = 0L
+    private var cacheMisses = 0L
+
+    internal fun cacheStats(): ParserCacheStats = synchronized(cacheLock) {
+        ParserCacheStats(hits = cacheHits, misses = cacheMisses, size = parseCache.size)
+    }
+
+    internal fun clearCache() = synchronized(cacheLock) {
+        parseCache.clear()
+        cacheHits = 0L
+        cacheMisses = 0L
+    }
 
     fun parse(
         rawInput: String,
@@ -26,26 +71,79 @@ object ChineseNaturalLanguageParser {
         val cleaned = rawInput.trim()
         if (cleaned.isEmpty()) return emptyList()
 
-        // Split multi-item instructions on semicolons, newlines, or explicit clause connectors
-        val clauses = cleaned
-            .split(Regex("[;；\\n]+|(?<=\\S)\\s*(?:另外|还有|以及然后|然后)\\s*"))
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-
         val effectiveSections = if (sectionTimes.isNotEmpty()) {
             sectionTimes.sortedBy { it.sectionNumber }
         } else {
             CourseColorPalette.defaultSectionTimes(0L)
         }
+        val safeWeeks = defaultTotalWeeks.coerceIn(1, 30)
+        val cacheKey = buildCacheKey(cleaned, nowMillis, effectiveSections, safeWeeks)
 
-        return clauses.mapNotNull { clause ->
+        synchronized(cacheLock) {
+            val cached = parseCache[cacheKey]
+            if (cached != null) {
+                cacheHits++
+                return cloneDrafts(cached)
+            }
+        }
+
+        // Split multi-item instructions on semicolons, newlines, or explicit clause connectors
+        val clauses = cleaned
+            .split(CLAUSE_SPLIT_REGEX)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+        val parsed = clauses.mapNotNull { clause ->
             parseSingleClause(
                 clause = clause,
                 nowMillis = nowMillis,
                 sectionTimes = effectiveSections,
-                defaultTotalWeeks = defaultTotalWeeks.coerceIn(1, 30),
+                defaultTotalWeeks = safeWeeks,
             )
         }
+
+        val snapshot = cloneDrafts(parsed)
+        synchronized(cacheLock) {
+            cacheMisses++
+            parseCache[cacheKey] = snapshot
+        }
+        return cloneDrafts(snapshot)
+    }
+
+    private fun cloneDrafts(drafts: List<SmartParsedDraft>): List<SmartParsedDraft> {
+        return drafts.map { draft ->
+            draft.copy(
+                daysOfWeek = draft.daysOfWeek.toList(),
+                conflicts = draft.conflicts.toList(),
+            )
+        }
+    }
+
+    private fun buildCacheKey(
+        cleanedInput: String,
+        nowMillis: Long,
+        sectionTimes: List<SectionTimeEntity>,
+        totalWeeks: Int,
+    ): String {
+        val dateKey = DateTimeUtils.formatDateKey(nowMillis)
+        val (hourOfDay, _) = DateTimeUtils.extractHourMinute(nowMillis)
+        val sectionsSig = buildString(sectionTimes.size * 12) {
+            sectionTimes.forEach { slot ->
+                append(slot.sectionNumber)
+                append(':')
+                append(slot.startHour)
+                append(':')
+                append(slot.startMinute)
+                append('-')
+                append(slot.endHour)
+                append(':')
+                append(slot.endMinute)
+                append(';')
+            }
+        }
+        val canonical = "$cleanedInput|$dateKey|$hourOfDay|$totalWeeks|$sectionsSig"
+        val digest = MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { byte -> "%02x".format(byte) }
     }
 
     private fun parseSingleClause(
@@ -57,34 +155,28 @@ object ChineseNaturalLanguageParser {
         var working = clause
 
         // 1. Do Not Disturb keywords
-        val dndRegex = Regex("(?:并?自动)?(?:开启|打开)?(?:免打扰|勿扰模式?|静音模式?)")
-        val enableDnd = dndRegex.containsMatchIn(working)
-        working = working.replace(dndRegex, " ")
+        val enableDnd = DND_REGEX.containsMatchIn(working)
+        working = working.replace(DND_REGEX, " ")
 
         // 2. Advance reminder lead minutes
         var reminderMinutes = 15
-        val noReminderRegex = Regex("(?:不用|无需|不)提醒")
-        if (noReminderRegex.containsMatchIn(working)) {
+        if (NO_REMINDER_REGEX.containsMatchIn(working)) {
             reminderMinutes = 0
-            working = working.replace(noReminderRegex, " ")
+            working = working.replace(NO_REMINDER_REGEX, " ")
         } else {
-            val reminderHalfHourRegex = Regex("(?:提前|前)\\s*半\\s*(?:个)?小时(?:提醒)?")
-            val reminderHourRegex = Regex("(?:提前|前)\\s*([0-9一二两三四五六七八九十]+)\\s*(?:个)?小时(?:提醒)?")
-            val reminderMinRegex = Regex("(?:提前|前)\\s*([0-9一二两三四五六七八九十]+)\\s*分钟?(?:提醒)?")
-
             when {
-                reminderHalfHourRegex.containsMatchIn(working) -> {
+                REMINDER_HALF_HOUR_REGEX.containsMatchIn(working) -> {
                     reminderMinutes = 30
-                    working = working.replace(reminderHalfHourRegex, " ")
+                    working = working.replace(REMINDER_HALF_HOUR_REGEX, " ")
                 }
-                reminderHourRegex.containsMatchIn(working) -> {
-                    val m = reminderHourRegex.find(working)!!
+                REMINDER_HOUR_REGEX.containsMatchIn(working) -> {
+                    val m = REMINDER_HOUR_REGEX.find(working)!!
                     val hrs = parseChineseOrArabicNumber(m.groupValues[1]) ?: 1
                     reminderMinutes = (hrs * 60).coerceIn(5, 120)
                     working = working.replace(m.value, " ")
                 }
-                reminderMinRegex.containsMatchIn(working) -> {
-                    val m = reminderMinRegex.find(working)!!
+                REMINDER_MIN_REGEX.containsMatchIn(working) -> {
+                    val m = REMINDER_MIN_REGEX.find(working)!!
                     reminderMinutes = (parseChineseOrArabicNumber(m.groupValues[1]) ?: 15).coerceIn(0, 120)
                     working = working.replace(m.value, " ")
                 }
@@ -93,20 +185,16 @@ object ChineseNaturalLanguageParser {
 
         // 3. Location extraction ("@xxx" or "在xxx")
         var location = ""
-        val atLocRegex = Regex("@([^\\s，。,.；;!！?？]+)")
-        val atMatch = atLocRegex.find(working)
+        val atMatch = AT_LOC_REGEX.find(working)
         if (atMatch != null) {
             location = atMatch.groupValues[1].trim()
             working = working.replace(atMatch.value, " ")
         } else {
-            val inLocRegex = Regex(
-                "(?:在|地点[:：]?|教室[:：]?)([^\\s，。,.；;!！?？上开做参加讨论复习写举行听讲]{1,18})(?=[上开做参加讨论复习写举行听讲\\s，。,.；;]|$)",
-            )
-            val inMatch = inLocRegex.find(working)
+            val inMatch = IN_LOC_REGEX.find(working)
             if (inMatch != null) {
                 val candidate = inMatch.groupValues[1].trim()
                 // Ignore pure time fragments mistakenly matched after "在"
-                if (!Regex("^[0-9一二三四五六七八九十点分号周今天明后早中晚上下午:-]+$").matches(candidate)) {
+                if (!PURE_TIME_FRAG_REGEX.matches(candidate)) {
                     location = candidate
                     working = working.replace(inMatch.value, " ")
                 }
