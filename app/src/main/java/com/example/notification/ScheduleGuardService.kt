@@ -69,18 +69,23 @@ class ScheduleGuardService : Service() {
     private val timeEventReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val action = intent.action ?: return
-            if (action == Intent.ACTION_TIME_TICK) {
-                triggerTimeTickSync()
-                return
-            }
             val now = System.currentTimeMillis()
-            val activeLive = (applicationContext as? ScheduleApp)
+            val liveUpdateManager = (applicationContext as? ScheduleApp)
                 ?.container
                 ?.liveUpdateManager
-                ?.activeLiveActivity
-                ?.value
+            val activeLive = liveUpdateManager?.activeLiveActivity?.value
+            val needsPhaseRebuild = activeLive != null &&
+                activeLive.isInProgress(now) &&
+                !liveUpdateManager.isCurrentlyPostedInProgress()
+            if (action == Intent.ACTION_TIME_TICK) {
+                triggerTimeTickSync(forceAlertOverride = needsPhaseRebuild)
+                return
+            }
+            val screenWakeOrUnlock = action == Intent.ACTION_SCREEN_ON ||
+                action == Intent.ACTION_USER_PRESENT
             val crossedBoundary = (lastScheduledBoundaryMillis > 0L && now >= lastScheduledBoundaryMillis) ||
-                (activeLive != null && now >= activeLive.endTimeMillis)
+                (activeLive != null && now >= activeLive.endTimeMillis) ||
+                (screenWakeOrUnlock && needsPhaseRebuild)
             val forceReschedule = crossedBoundary ||
                 action == Intent.ACTION_DATE_CHANGED ||
                 action == Intent.ACTION_TIME_CHANGED ||
@@ -206,7 +211,10 @@ class ScheduleGuardService : Service() {
      * Handles every system [Intent.ACTION_TIME_TICK] broadcast directly in the service coroutine,
      * driving [LiveUpdateCoordinator.syncAll] even if background AlarmManager timers were deferred.
      */
-    internal fun triggerTimeTickSync(nowOverrideMillis: Long? = null) {
+    internal fun triggerTimeTickSync(
+        nowOverrideMillis: Long? = null,
+        forceAlertOverride: Boolean = false,
+    ) {
         val wakeLock = acquireWakeLock(SYNC_WAKE_LOCK_TAG, 6_000L)
         serviceScope.launch {
             try {
@@ -221,10 +229,14 @@ class ScheduleGuardService : Service() {
                     }
 
                     val now = nowOverrideMillis ?: System.currentTimeMillis()
+                    val activeItem = app.container.liveUpdateManager.activeLiveActivity.value
+                    val needsPhaseRebuild = activeItem != null &&
+                        activeItem.isInProgress(now) &&
+                        !app.container.liveUpdateManager.isCurrentlyPostedInProgress()
                     runCatching {
                         app.container.liveUpdateCoordinator.syncAll(
                             nowMillis = now,
-                            forceAlert = false,
+                            forceAlert = forceAlertOverride || needsPhaseRebuild,
                             rescheduleAlarms = false,
                         )
                     }
@@ -262,6 +274,10 @@ class ScheduleGuardService : Service() {
                     }
 
                     val now = System.currentTimeMillis()
+                    val activeItem = app.container.liveUpdateManager.activeLiveActivity.value
+                    val needsPhaseRebuild = activeItem != null &&
+                        activeItem.isInProgress(now) &&
+                        !app.container.liveUpdateManager.isCurrentlyPostedInProgress()
                     val todayKey = DateTimeUtils.formatDateKey(now)
                     val shouldReschedule = rescheduleAlarms ||
                         lastSyncedDateKey != todayKey ||
@@ -270,7 +286,7 @@ class ScheduleGuardService : Service() {
                     runCatching {
                         app.container.liveUpdateCoordinator.syncAll(
                             nowMillis = now,
-                            forceAlert = forceAlert,
+                            forceAlert = forceAlert || needsPhaseRebuild,
                             rescheduleAlarms = shouldReschedule,
                         )
                     }

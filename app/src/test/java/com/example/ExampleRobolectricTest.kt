@@ -2248,16 +2248,18 @@ class ExampleRobolectricTest {
                 coordinator.syncAll(nowMillis = base, forceAlert = true, rescheduleAlarms = true)
                 val prepNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
                 assertNotNull(prepNotif)
+                assertFalse(manager.isCurrentlyPostedInProgress())
                 assertEquals(start, prepNotif.`when`)
                 assertTrue(
                     prepNotif.extras.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)
                         ?.toString().orEmpty().contains("课前准备"),
                 )
 
-                // Phase 2: Crossing startTimeMillis (simulating ACTION_TIME_TICK with forceAlert = false)
+                // Phase 2: Crossing startTimeMillis rebuilds notification & transitions to active
                 coordinator.syncAll(nowMillis = start + 1_000L, forceAlert = false, rescheduleAlarms = false)
                 val activeNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
                 assertNotNull(activeNotif)
+                assertTrue(manager.isCurrentlyPostedInProgress())
                 assertEquals(end, activeNotif.`when`)
                 assertEquals(0, activeNotif.flags and android.app.Notification.FLAG_ONLY_ALERT_ONCE)
                 assertTrue(
@@ -2265,9 +2267,16 @@ class ExampleRobolectricTest {
                         ?.toString().orEmpty().contains("进行中"),
                 )
 
+                // Mid-phase 5% progress update stays silent without tearing down capsule
+                coordinator.syncAll(nowMillis = start + 10 * 60_000L, forceAlert = false, rescheduleAlarms = false)
+                val progressNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+                assertNotNull(progressNotif)
+                assertTrue((progressNotif.flags and android.app.Notification.FLAG_ONLY_ALERT_ONCE) != 0)
+
                 // Phase 3: Passing endTimeMillis dismisses notification
                 coordinator.syncAll(nowMillis = end + 1_000L, forceAlert = false, rescheduleAlarms = true)
                 assertNull(manager.activeLiveActivity.value)
+                assertFalse(manager.isCurrentlyPostedInProgress())
                 assertNull(shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID))
             }
         } finally {
@@ -2311,6 +2320,7 @@ class ExampleRobolectricTest {
 
             val prepNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
             assertNotNull(prepNotif)
+            assertFalse(app.container.liveUpdateManager.isCurrentlyPostedInProgress())
             assertTrue(
                 prepNotif.extras.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)
                     ?.toString().orEmpty().contains("课前准备"),
@@ -2327,7 +2337,7 @@ class ExampleRobolectricTest {
                     ?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)
                     ?.toString()
                     .orEmpty()
-                if (subText.contains("进行中")) {
+                if (subText.contains("进行中") && app.container.liveUpdateManager.isCurrentlyPostedInProgress()) {
                     transitioned = true
                     break
                 }

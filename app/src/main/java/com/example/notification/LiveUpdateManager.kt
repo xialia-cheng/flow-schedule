@@ -49,12 +49,19 @@ class LiveUpdateManager(private val context: Context) {
     private val runtimePrefs =
         context.getSharedPreferences(RUNTIME_PREFS_NAME, Context.MODE_PRIVATE)
 
+    @Volatile
     private var currentlyPostedKey: String? = null
+    @Volatile
     private var currentlyPostedSourceId: Long? = null
+    @Volatile
     private var currentlyPostedSignature: String? = null
+    @Volatile
     private var currentlyPostedIsInProgress: Boolean? = null
+    @Volatile
     private var currentlyPostedTargetMillis: Long? = null
     private var lastPromotableCharacteristics: Boolean? = null
+
+    fun isCurrentlyPostedInProgress(): Boolean = currentlyPostedIsInProgress == true
 
     private var activeFocusItem: LiveActivityItem? = null
 
@@ -451,12 +458,20 @@ class LiveUpdateManager(private val context: Context) {
             }.getOrNull()
         }
 
+        val shouldRebuildCapsule = phaseChanged || targetChanged || (!isSameItem && isCurrentlyActiveInSystem)
+
         currentlyPostedKey = activeItem.uniqueKey
         currentlyPostedSourceId = activeItem.sourceId
         currentlyPostedSignature = postSignature
         currentlyPostedIsInProgress = isInProgress
         currentlyPostedTargetMillis = targetMillis
         lastPostedEndTimeMillis = activeItem.endTimeMillis
+
+        if (shouldRebuildCapsule) {
+            runCatching {
+                notificationManager.cancel(LIVE_UPDATE_NOTIFICATION_ID)
+            }
+        }
 
         @SuppressLint("MissingPermission")
         runCatching {
