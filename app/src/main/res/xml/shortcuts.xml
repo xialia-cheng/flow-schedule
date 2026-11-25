@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="smart_capture"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_smart_capture"
+        android:shortcutShortLabel="@string/shortcut_smart_capture_short"
+        android:shortcutLongLabel="@string/shortcut_smart_capture_long">
+        <intent
+            android:action="com.example.action.SHORTCUT_SMART_CAPTURE"
+            android:targetPackage="com.xialia.rippleplan"
+            android:targetClass="com.example.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="new_schedule"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new_schedule"
+        android:shortcutShortLabel="@string/shortcut_new_schedule_short"
+        android:shortcutLongLabel="@string/shortcut_new_schedule_long">
+        <intent
+            android:action="com.example.action.SHORTCUT_NEW_SCHEDULE"
+            android:targetPackage="com.xialia.rippleplan"
+            android:targetClass="com.example.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="today_timetable"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_today_timetable"
+        android:shortcutShortLabel="@string/shortcut_today_timetable_short"
+        android:shortcutLongLabel="@string/shortcut_today_timetable_long">
+        <intent
+            android:action="com.example.action.SHORTCUT_TODAY_TIMETABLE"
+            android:targetPackage="com.xialia.rippleplan"
+            android:targetClass="com.example.MainActivity" />
+    </shortcut>
+</shortcuts>

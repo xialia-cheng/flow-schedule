@@ -2354,6 +2354,114 @@ class ExampleRobolectricTest {
             }
         }
     }
+
+    @Test
+    fun `live update restores subject badge bitmap, 3-stage icons, clean progress bar, shortcuts and TileService`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val appContext = ApplicationProvider.getApplicationContext<android.app.Application>()
+        org.robolectric.Shadows.shadowOf(appContext).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+
+        val manager = com.example.notification.LiveUpdateManager(context)
+        manager.ensureNotificationChannel()
+
+        val baseNow = 1_795_000_000_000L
+        val start = baseNow + 10 * 60_000L
+        val end = start + 45 * 60_000L
+        val courseItem = LiveActivityItem(
+            sourceType = LiveActivitySourceType.COURSE,
+            sourceId = 77L,
+            dateKey = "2026-11-25",
+            title = "计算机网络",
+            location = "信工楼201",
+            startTimeMillis = start,
+            endTimeMillis = end,
+            reminderMinutesBefore = 15,
+            accentColorArgb = android.graphics.Color.rgb(77, 102, 154),
+            showLockscreenDetails = false,
+        )
+
+        // 1. Verify 3-stage bucket resolution & small icon mapping
+        val prepStage = com.example.notification.LiveUpdateManager.resolveStageBucket(courseItem, start - 5 * 60_000L)
+        val activeStage = com.example.notification.LiveUpdateManager.resolveStageBucket(courseItem, start + 10 * 60_000L)
+        val endingStage = com.example.notification.LiveUpdateManager.resolveStageBucket(courseItem, end - 5 * 60_000L)
+        assertEquals(com.example.notification.LiveUpdateManager.Companion.LiveStageBucket.PREP, prepStage)
+        assertEquals(com.example.notification.LiveUpdateManager.Companion.LiveStageBucket.ACTIVE, activeStage)
+        assertEquals(com.example.notification.LiveUpdateManager.Companion.LiveStageBucket.ENDING_SOON, endingStage)
+        assertEquals(R.drawable.ic_stat_course_prep, com.example.notification.LiveUpdateManager.resolveSmallIconRes(courseItem, prepStage))
+        assertEquals(R.drawable.ic_stat_course_live, com.example.notification.LiveUpdateManager.resolveSmallIconRes(courseItem, activeStage))
+        assertEquals(R.drawable.ic_stat_course_ending, com.example.notification.LiveUpdateManager.resolveSmallIconRes(courseItem, endingStage))
+
+        // 2. Verify subject badge bitmap dimensions & Notification largeIcon + redacted publicVersion privacy
+        val badge = com.example.notification.LiveUpdateManager.buildSubjectBadgeBitmap(
+            courseItem,
+            android.graphics.Color.rgb(77, 102, 154),
+        )
+        assertEquals(128, badge.width)
+        assertEquals(128, badge.height)
+
+        val prepNotif = manager.buildLiveActivityNotification(courseItem, start - 5 * 60_000L, silentUpdate = false)
+        assertNotNull(prepNotif.getLargeIcon())
+        assertNull(prepNotif.publicVersion?.getLargeIcon())
+        assertEquals(R.drawable.ic_stat_course_prep, prepNotif.smallIcon.resId)
+
+        // 3. Verify ProgressStyle has 2 clean segments and NO Point(300) gray milestone dot
+        assertEquals(
+            "android.app.Notification\$ProgressStyle",
+            prepNotif.extras.getString(android.app.Notification.EXTRA_TEMPLATE),
+        )
+        @Suppress("DEPRECATION")
+        val rawPoints = prepNotif.extras.get("android.progressPoints")
+        assertTrue(
+            rawPoints == null ||
+                (rawPoints is Collection<*> && rawPoints.isEmpty()) ||
+                (rawPoints is Array<*> && rawPoints.isEmpty()),
+        )
+
+        // 4. Verify stageIconBucket change (ACTIVE -> ENDING_SOON) updates icon silently without cancelling
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val shadowNm = org.robolectric.Shadows.shadowOf(nm)
+        manager.syncLiveActivity(listOf(courseItem), nowMillis = start + 10 * 60_000L, forceAlert = true)
+        assertEquals(R.drawable.ic_stat_course_live, shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID).smallIcon.resId)
+        manager.syncLiveActivity(listOf(courseItem), nowMillis = end - 5 * 60_000L, forceAlert = false)
+        val endingNotif = shadowNm.getNotification(com.example.notification.LiveUpdateManager.LIVE_UPDATE_NOTIFICATION_ID)
+        assertEquals(R.drawable.ic_stat_course_ending, endingNotif.smallIcon.resId)
+        assertTrue((endingNotif.flags and android.app.Notification.FLAG_ONLY_ALERT_ONCE) != 0)
+        manager.cancelLiveUpdate()
+
+        // 5. Verify shortcuts.xml content & manifest registration + RipplePlanTileService registration
+        val pm = context.packageManager
+        val activityInfo = pm.getActivityInfo(
+            android.content.ComponentName(context.packageName, MainActivity::class.java.name),
+            android.content.pm.PackageManager.GET_META_DATA,
+        )
+        assertEquals(R.xml.shortcuts, activityInfo.metaData?.getInt("android.app.shortcuts"))
+
+        val parser = context.resources.getXml(R.xml.shortcuts)
+        val foundShortcutIds = mutableListOf<String>()
+        val targetPackages = mutableListOf<String>()
+        var eventType = parser.eventType
+        while (eventType != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+            if (eventType == org.xmlpull.v1.XmlPullParser.START_TAG) {
+                if (parser.name == "shortcut") {
+                    parser.getAttributeValue("http://schemas.android.com/apk/res/android", "shortcutId")
+                        ?.let { foundShortcutIds.add(it) }
+                } else if (parser.name == "intent") {
+                    parser.getAttributeValue("http://schemas.android.com/apk/res/android", "targetPackage")
+                        ?.let { targetPackages.add(it) }
+                }
+            }
+            eventType = parser.next()
+        }
+        assertEquals(listOf("smart_capture", "new_schedule", "today_timetable"), foundShortcutIds)
+        assertTrue(targetPackages.all { it == "com.xialia.rippleplan" })
+
+        val tileServiceInfo = pm.getServiceInfo(
+            android.content.ComponentName(context.packageName, com.example.notification.RipplePlanTileService::class.java.name),
+            0,
+        )
+        assertTrue(tileServiceInfo.exported)
+        assertEquals(android.Manifest.permission.BIND_QUICK_SETTINGS_TILE, tileServiceInfo.permission)
+    }
 }
 
 

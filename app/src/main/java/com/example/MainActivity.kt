@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val deepLinkTab = MutableStateFlow<AppDestination?>(null)
+    private val pendingShortcutAction = MutableStateFlow<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,6 +110,7 @@ class MainActivity : ComponentActivity() {
             val useDynamicColor by scheduleViewModel.useDynamicColor.collectAsStateWithLifecycle()
             val timetableState by timetableViewModel.uiState.collectAsStateWithLifecycle()
             val pendingDeepLink by deepLinkTab.collectAsStateWithLifecycle()
+            val shortcutAction by pendingShortcutAction.collectAsStateWithLifecycle()
             val systemDark = isSystemInDarkTheme()
             val useDarkTheme = when (themeMode) {
                 AppThemeMode.SYSTEM -> systemDark
@@ -183,6 +185,8 @@ class MainActivity : ComponentActivity() {
                     appUpdateViewModel = appUpdateViewModel,
                     deepLinkDestination = pendingDeepLink,
                     onDeepLinkConsumed = { deepLinkTab.value = null },
+                    pendingShortcutAction = shortcutAction,
+                    onShortcutActionConsumed = { pendingShortcutAction.value = null },
                     onRequestPostNotifications = {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -217,6 +221,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleDeepLinkIntent(intent: Intent?) {
+        when (intent?.action) {
+            ACTION_SHORTCUT_SMART_CAPTURE -> {
+                pendingShortcutAction.value = ACTION_SHORTCUT_SMART_CAPTURE
+                return
+            }
+            ACTION_SHORTCUT_NEW_SCHEDULE -> {
+                deepLinkTab.value = AppDestination.SCHEDULE
+                pendingShortcutAction.value = ACTION_SHORTCUT_NEW_SCHEDULE
+                return
+            }
+            ACTION_SHORTCUT_TODAY_TIMETABLE -> {
+                deepLinkTab.value = AppDestination.TIMETABLE
+                return
+            }
+        }
         val sourceType = intent?.getStringExtra(LiveUpdateManager.EXTRA_SOURCE_TYPE) ?: return
         deepLinkTab.value = when (sourceType) {
             LiveActivitySourceType.COURSE.name -> AppDestination.TIMETABLE
@@ -224,5 +243,11 @@ class MainActivity : ComponentActivity() {
             LiveActivitySourceType.FOCUS.name -> AppDestination.STUDY
             else -> null
         }
+    }
+
+    companion object {
+        const val ACTION_SHORTCUT_SMART_CAPTURE = "com.example.action.SHORTCUT_SMART_CAPTURE"
+        const val ACTION_SHORTCUT_NEW_SCHEDULE = "com.example.action.SHORTCUT_NEW_SCHEDULE"
+        const val ACTION_SHORTCUT_TODAY_TIMETABLE = "com.example.action.SHORTCUT_TODAY_TIMETABLE"
     }
 }

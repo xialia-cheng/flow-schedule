@@ -88,6 +88,8 @@ fun AppRootScreen(
     appUpdateViewModel: AppUpdateViewModel,
     deepLinkDestination: AppDestination?,
     onDeepLinkConsumed: () -> Unit,
+    pendingShortcutAction: String? = null,
+    onShortcutActionConsumed: () -> Unit = {},
     onRequestPostNotifications: () -> Unit,
     onOpenPromotedSettings: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
@@ -117,6 +119,24 @@ fun AppRootScreen(
         if (deepLinkDestination != null) {
             currentTab = deepLinkDestination
             onDeepLinkConsumed()
+        }
+    }
+
+    LaunchedEffect(pendingShortcutAction) {
+        when (pendingShortcutAction) {
+            com.example.MainActivity.ACTION_SHORTCUT_SMART_CAPTURE -> {
+                smartCaptureViewModel.openInputSheet()
+                onShortcutActionConsumed()
+            }
+            com.example.MainActivity.ACTION_SHORTCUT_NEW_SCHEDULE -> {
+                currentTab = AppDestination.SCHEDULE
+                scheduleViewModel.openNewScheduleEditor()
+                onShortcutActionConsumed()
+            }
+            com.example.MainActivity.ACTION_SHORTCUT_TODAY_TIMETABLE -> {
+                currentTab = AppDestination.TIMETABLE
+                onShortcutActionConsumed()
+            }
         }
     }
 

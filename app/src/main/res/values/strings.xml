@@ -48,4 +48,12 @@
     <string name="cd_toggle_complete">切换日程完成状态</string>
     <string name="cd_delete_schedule">删除日程</string>
     <string name="cd_empty_illustration">暂无日程插画</string>
+
+    <string name="shortcut_smart_capture_short">一句话创建</string>
+    <string name="shortcut_smart_capture_long">一句话智能创建日程或课程</string>
+    <string name="shortcut_new_schedule_short">新建日程</string>
+    <string name="shortcut_new_schedule_long">新建自定义日程提醒</string>
+    <string name="shortcut_today_timetable_short">查看今日课表</string>
+    <string name="shortcut_today_timetable_long">查看今日课表与实时课程安排</string>
+    <string name="tile_quick_subtitle">一句话创建 · 今日日程</string>
 </resources>

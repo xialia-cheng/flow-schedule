@@ -10,7 +10,14 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.Typeface
 import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
@@ -417,12 +424,14 @@ class LiveUpdateManager(private val context: Context) {
         }
 
         val isInProgress = activeItem.isInProgress(nowMillis)
+        val stageBucket = resolveStageBucket(activeItem, nowMillis)
+        val stageIconBucket = stageBucket.name
         val targetMillis = if (isInProgress) activeItem.endTimeMillis else activeItem.startTimeMillis
         val progressBucket = activeItem.progressPermille(nowMillis) / 50
         val dndActive = isDoNotDisturbActive()
         val colorKey = activeItem.accentColorArgb ?: 0
         val displayMetaKey = "${activeItem.showLocation}:${activeItem.showTeacher}:${activeItem.showNotes}:${activeItem.showLockscreenDetails}:${activeItem.title}:${activeItem.isBreakPhase}"
-        val postSignature = "${activeItem.uniqueKey}|$isInProgress|$targetMillis|$dndActive|$progressBucket|$colorKey|$displayMetaKey"
+        val postSignature = "${activeItem.uniqueKey}|$isInProgress|$stageIconBucket|$targetMillis|$dndActive|$progressBucket|$colorKey|$displayMetaKey"
 
         val isSameItem = currentlyPostedKey == activeItem.uniqueKey
         val phaseChanged = isSameItem &&
@@ -548,13 +557,10 @@ class LiveUpdateManager(private val context: Context) {
             COLOR_SEGMENT_PREP
         }
         val activeSegmentColor = baseAccentColor
-        val milestonePointColor = blendColorArgb(baseAccentColor, Color.WHITE, 0.62f)
         val themeAccentColor = baseAccentColor
-        val smallIconRes = if (item.sourceType == LiveActivitySourceType.COURSE) {
-            R.drawable.ic_stat_course_live
-        } else {
-            R.drawable.ic_stat_flow_schedule
-        }
+        val stageBucket = resolveStageBucket(item, nowMillis)
+        val smallIconRes = resolveSmallIconRes(item, stageBucket)
+        val badgeBitmap = buildSubjectBadgeBitmap(item, themeAccentColor)
 
         // Distinct 2-stage segmented ProgressStyle dynamically tinted with current course/schedule color
         val progressStyle = Notification.ProgressStyle()
@@ -569,11 +575,6 @@ class LiveUpdateManager(private val context: Context) {
                             Notification.ProgressStyle.Segment(300).setColor(prepSegmentColor),
                             // Stage 2: 正在上课 / 进行中 (300..1000)
                             Notification.ProgressStyle.Segment(700).setColor(activeSegmentColor),
-                        ),
-                    )
-                    setProgressPoints(
-                        listOf(
-                            Notification.ProgressStyle.Point(300).setColor(milestonePointColor),
                         ),
                     )
                 } else {
@@ -615,6 +616,7 @@ class LiveUpdateManager(private val context: Context) {
         // the instant the session ends even if the app process is frozen in the background.
         return Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(smallIconRes)
+            .setLargeIcon(badgeBitmap)
             .setColor(themeAccentColor)
             .setSubText(topSubText)
             .setContentTitle(item.titleWithLocation())
@@ -682,11 +684,9 @@ class LiveUpdateManager(private val context: Context) {
         val contentText = item.expandedContentText(nowMillis)
         val themeAccentColor = item.accentColorArgb
             ?: if (isInProgress) COLOR_ACCENT_ACTIVE else COLOR_ACCENT_PREP
-        val smallIconRes = if (item.sourceType == LiveActivitySourceType.COURSE) {
-            R.drawable.ic_stat_course_live
-        } else {
-            R.drawable.ic_stat_flow_schedule
-        }
+        val stageBucket = resolveStageBucket(item, nowMillis)
+        val smallIconRes = resolveSmallIconRes(item, stageBucket)
+        val badgeBitmap = buildSubjectBadgeBitmap(item, themeAccentColor)
 
         val remainingEndMillis = (item.endTimeMillis - nowMillis).coerceAtLeast(1_000L)
         val liveExtras = Bundle().apply {
@@ -701,6 +701,7 @@ class LiveUpdateManager(private val context: Context) {
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(smallIconRes)
+            .setLargeIcon(badgeBitmap)
             .setColor(themeAccentColor)
             .setSubText(topSubText)
             .setContentTitle(item.titleWithLocation())
@@ -890,6 +891,80 @@ class LiveUpdateManager(private val context: Context) {
         private const val KEY_LAST_POSTED_END_TIME_MILLIS = "last_posted_end_time_millis"
         private const val FOCUS_SESSION_SOURCE_ID = 900_001L
         private const val ANDROID_16_API_LEVEL = 36
+        private const val ENDING_SOON_WINDOW_MILLIS = 10 * 60_000L
+        private const val SUBJECT_BADGE_SIZE_PX = 128
+
+        internal enum class LiveStageBucket {
+            PREP,
+            ACTIVE,
+            ENDING_SOON,
+        }
+
+        internal fun resolveStageBucket(item: LiveActivityItem, nowMillis: Long): LiveStageBucket {
+            if (!item.isInProgress(nowMillis)) return LiveStageBucket.PREP
+            val remainingMillis = (item.endTimeMillis - nowMillis).coerceAtLeast(0L)
+            return if (remainingMillis <= ENDING_SOON_WINDOW_MILLIS) {
+                LiveStageBucket.ENDING_SOON
+            } else {
+                LiveStageBucket.ACTIVE
+            }
+        }
+
+        internal fun resolveSmallIconRes(item: LiveActivityItem, stageBucket: LiveStageBucket): Int {
+            return when (stageBucket) {
+                LiveStageBucket.PREP -> R.drawable.ic_stat_course_prep
+                LiveStageBucket.ENDING_SOON -> R.drawable.ic_stat_course_ending
+                LiveStageBucket.ACTIVE -> if (item.sourceType == LiveActivitySourceType.COURSE) {
+                    R.drawable.ic_stat_course_live
+                } else {
+                    R.drawable.ic_stat_flow_schedule
+                }
+            }
+        }
+
+        internal fun buildSubjectBadgeBitmap(
+            item: LiveActivityItem,
+            accentColorArgb: Int,
+        ): Bitmap {
+            val size = SUBJECT_BADGE_SIZE_PX
+            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+
+            val topColor = blendColorArgb(accentColorArgb, Color.WHITE, 0.14f)
+            val bottomColor = blendColorArgb(accentColorArgb, Color.BLACK, 0.16f)
+            val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = LinearGradient(
+                    0f,
+                    0f,
+                    size.toFloat(),
+                    size.toFloat(),
+                    topColor,
+                    bottomColor,
+                    Shader.TileMode.CLAMP,
+                )
+            }
+            val rect = RectF(0f, 0f, size.toFloat(), size.toFloat())
+            val radius = size * 0.26f
+            canvas.drawRoundRect(rect, radius, radius, bgPaint)
+
+            val initial = item.title
+                .trim()
+                .firstOrNull { !it.isWhitespace() }
+                ?.uppercaseChar()
+                ?.toString()
+                ?: "微"
+
+            val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textAlign = Paint.Align.CENTER
+                textSize = size * 0.50f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val fm = textPaint.fontMetrics
+            val baseline = (size / 2f) - ((fm.ascent + fm.descent) / 2f)
+            canvas.drawText(initial, size / 2f, baseline, textPaint)
+            return bitmap
+        }
 
         private const val ACTION_MANAGE_APP_PROMOTED_NOTIFICATIONS_COMPAT =
             "android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS"
