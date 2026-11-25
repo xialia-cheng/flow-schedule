@@ -18,6 +18,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Kotlin-7652a4?logo=kotlin&amp;logoColor=white" alt="Kotlin">
   <img src="https://img.shields.io/badge/Jetpack%20Compose-4d669a?logo=jetpackcompose&amp;logoColor=white" alt="Jetpack Compose">
+  <a href="https://github.com/xialia-cheng/ripple-plan/releases"><img src="https://img.shields.io/github/downloads/xialia-cheng/ripple-plan/total?label=%E4%B8%8B%E8%BD%BD%E9%87%8F&amp;color=4d669a" alt="累计下载量"></a>
 </p>
 
 <p align="center">
