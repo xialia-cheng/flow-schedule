@@ -1,5 +1,8 @@
 package com.example.ui.mine
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -61,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.R
+import com.example.ui.components.ComprehensiveTutorialSections
 import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
@@ -132,13 +136,13 @@ fun AboutHelpLicenseSheet(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "关于应用、帮助与开源协议",
+                        text = "关于应用、使用教程与开源协议",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = colorScheme.onSurface,
                     )
                     Text(
-                        text = "微澜日程（RipplePlan）· 版本与开源信息",
+                        text = "微澜日程（RipplePlan）· 全功能使用教程、防杀指南与开源信息",
                         style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.onSurfaceVariant,
                     )
@@ -419,25 +423,18 @@ fun AboutHelpLicenseSheet(
                 }
             }
 
-            // 2. 使用帮助与权限说明
+            // 2. 详尽使用教程与避坑指南
             AboutSectionCard(
                 icon = Icons.AutoMirrored.Rounded.HelpOutline,
-                title = "2. 使用帮助与权限说明",
+                title = "2. 详尽使用教程与避坑指南",
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HelpBulletItem(
-                        heading = "精确闹钟与后台无限制 / 自启动",
-                        body = "请在系统设置中授予“闹钟和提醒”精确闹钟权限，并将本应用的电池策略设为“无限制”（部分系统建议同时允许自启动），以确保课前提醒、00:00 跨天更新与下课自动消隐通知在息屏后台状态下准时触发。",
-                    )
-                    HelpBulletItem(
-                        heading = "实况通知 / 实时活动权限",
-                        body = "基于 Android 16+ 原生 Live Updates（实时更新）接口实现，支持已接入该标准的系统级胶囊（如 ColorOS 流体云等），其余系统自动降级为标准常驻进度通知（保留 Chronometer 实时倒计时与快捷操作，不影响提醒）。在支持实况通知的设备上，需在系统设置中开启通知与“实时活动”权限。",
-                    )
-                    HelpBulletItem(
-                        heading = "系统勿扰权限开启方法",
-                        body = "前往「我的 -> 通知与免打扰设置」点击“去授权”，或在系统「设置 -> 隐私 / 权限 -> 勿扰权限」中允许微澜日程控制勿扰状态，即可在专注或上课期间自动切换静音级别，并在结束后自动恢复。",
-                    )
-                }
+                ComprehensiveTutorialSections(
+                    onCopyText = { label, text ->
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText(label, text))
+                        onShowMessage("已复制$label，可直接粘贴或发给 AI 整理课表")
+                    },
+                )
             }
 
             // 3. 隐私与网络说明

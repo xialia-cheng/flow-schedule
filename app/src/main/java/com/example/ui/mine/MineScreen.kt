@@ -195,9 +195,9 @@ fun MineScreen(
         "纯本地离线解析 · JSON 备份"
     }
     val advancedSummary = if (updateState.availableRelease != null) {
-        "发现新版本 v${updateState.availableRelease!!.versionName} · 实况演练与开源协议"
+        "发现新版本 v${updateState.availableRelease!!.versionName} · 使用教程与开源协议"
     } else {
-        "v${BuildConfig.VERSION_NAME} · 实况演练、检查更新与开源协议"
+        "v${BuildConfig.VERSION_NAME} · 使用教程、实况演练与检查更新"
     }
 
     Box(

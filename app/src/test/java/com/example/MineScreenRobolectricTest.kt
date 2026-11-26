@@ -145,6 +145,71 @@ class MineScreenRobolectricTest {
     }
 
     @Test
+    fun `import quick guide card collapses by default and expands with copyable CSV template`() {
+        var copiedLabel = ""
+        var copiedText = ""
+        composeTestRule.setContent {
+            FlowScheduleTheme {
+                com.example.ui.components.TimetableImportQuickGuideCard(
+                    onCopyTemplate = { label, text ->
+                        copiedLabel = label
+                        copiedText = text
+                    },
+                )
+            }
+        }
+
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("import_quick_guide_header").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("import_quick_guide_content").assertDoesNotExist()
+
+        composeTestRule.onNodeWithTag("import_quick_guide_header").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("import_quick_guide_content").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("import_guide_copy_csv_template_button")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        org.junit.Assert.assertEquals("标准 CSV 模板", copiedLabel)
+        org.junit.Assert.assertEquals(
+            com.example.data.TimetableImportExport.SAMPLE_CSV_TEMPLATE,
+            copiedText,
+        )
+    }
+
+    @Test
+    fun `about help license sheet renders 4 expandable tutorial sections covering import and rom anti-kill`() {
+        composeTestRule.setContent {
+            FlowScheduleTheme {
+                com.example.ui.mine.AboutHelpLicenseSheet(
+                    onDismiss = {},
+                    onShowMessage = {},
+                )
+            }
+        }
+
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("tutorial_section_1_header")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithTag("tutorial_section_1_content").assertExists()
+        composeTestRule.onNodeWithTag("tutorial_section_3_content").assertDoesNotExist()
+
+        composeTestRule.onNodeWithTag("tutorial_section_3_header")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("tutorial_section_3_content").assertExists()
+
+        composeTestRule.onNodeWithTag("tutorial_section_4_header")
+            .performScrollTo()
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("tutorial_section_4_content").assertExists()
+    }
+
+    @Test
     fun `fluid cloud test card shows stop test button when active test exists and triggers stop callback`() {
         val app = ApplicationProvider.getApplicationContext<ScheduleApp>()
         val container = app.container

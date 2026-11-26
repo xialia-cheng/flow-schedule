@@ -418,12 +418,12 @@ internal fun AdvancedAndAboutSectionContent(
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "关于应用、帮助与开源协议",
+                    text = "关于应用、使用教程与开源协议",
                     style = MaterialTheme.typography.titleSmall,
                     color = colorScheme.onSurface,
                 )
                 Text(
-                    text = "v${BuildConfig.VERSION_NAME} · 作者、权限指南、隐私说明与 MIT 协议",
+                    text = "v${BuildConfig.VERSION_NAME} · 全功能使用教程、防杀指南、隐私说明与 MIT 协议",
                     style = MaterialTheme.typography.bodySmall,
                     color = colorScheme.onSurfaceVariant,
                 )

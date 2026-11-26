@@ -64,6 +64,7 @@ import com.example.data.BackupRestoreMode
 import com.example.data.FullBackupPayload
 import com.example.data.TimetableImportExport
 import com.example.ui.components.BackupRestoreConfirmDialog
+import com.example.ui.components.TimetableImportQuickGuideCard
 import com.example.ui.components.rememberAppHaptics
 import com.example.ui.theme.FlowTheme
 import com.example.ui.theme.MonoFontFamily
@@ -176,7 +177,16 @@ fun TimetableImportSheet(
                 color = colorScheme.onSurfaceVariant,
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            TimetableImportQuickGuideCard(
+                onCopyTemplate = { label, text ->
+                    copyTextToClipboard(context, label, text)
+                    onNotify("已复制$label，可直接粘贴导入或发给 AI 转表")
+                },
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // 4-mode selector
             Row(
